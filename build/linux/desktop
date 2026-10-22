@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Name=UTM Adapter
+Comment=Ground control to Flight Blender
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/utm-adapter %u
+Terminal=false
+Type=Application
+Icon=utm-adapter
+Categories=Utility;
+StartupWMClass=utm-adapter
