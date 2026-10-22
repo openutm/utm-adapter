@@ -61,7 +61,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent bin/utm-adapter.app bin/utm-adapter-macos-universal.zip
       - name: Build Windows executable
         if: runner.os == 'Windows'
-        run: wails3 build ARCH=amd64
+        run: wails3 build GOARCH=amd64
       - name: Archive Windows executable
         if: runner.os == 'Windows'
         shell: pwsh
@@ -69,7 +69,7 @@ jobs:
       - name: Build Linux executable
         if: runner.os == 'Linux'
         run: |
-          wails3 build ARCH=amd64
+          wails3 build GOARCH=amd64
           tar -czf bin/utm-adapter-linux-amd64.tar.gz -C bin utm-adapter
       - name: Check Svelte and TypeScript
         run: npm --prefix frontend run check
