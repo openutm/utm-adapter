@@ -1,0 +1,94 @@
+name: Desktop binaries
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: macos-universal
+          - runner: windows-2025
+            target: windows-amd64
+          - runner: ubuntu-24.04
+            target: linux-amd64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Linux native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libx11-dev
+      - name: Install pinned Wails CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.34
+      - name: Backend tests and vet
+        run: |
+          go test -race ./internal/...
+          go vet ./internal/...
+      - name: Build macOS app for Apple Silicon and Intel
+        if: runner.os == 'macOS'
+        run: |
+          wails3 task darwin:package:universal
+          lipo -verify_arch arm64 x86_64 bin/utm-adapter.app/Contents/MacOS/utm-adapter
+          codesign --verify --deep --strict bin/utm-adapter.app
+          ditto -c -k --sequesterRsrc --keepParent bin/utm-adapter.app bin/utm-adapter-macos-universal.zip
+      - name: Build Windows executable
+        if: runner.os == 'Windows'
+        run: wails3 build ARCH=amd64
+      - name: Archive Windows executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path bin/utm-adapter.exe -DestinationPath bin/utm-adapter-windows-amd64.zip
+      - name: Build Linux executable
+        if: runner.os == 'Linux'
+        run: |
+          wails3 build ARCH=amd64
+          tar -czf bin/utm-adapter-linux-amd64.tar.gz -C bin utm-adapter
+      - name: Check Svelte and TypeScript
+        run: npm --prefix frontend run check
+      - name: Generate download checksum
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          const name = `utm-adapter-${process.env.TARGET}.${process.env.TARGET.startsWith('linux') ? 'tar.gz' : 'zip'}`;
+          writeFileSync(`bin/${name}.sha256`, `${createHash('sha256').update(readFileSync(`bin/${name}`)).digest('hex')}  ${name}\n`);
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: utm-adapter-${{ matrix.target }}
+          path: |
+            bin/utm-adapter-${{ matrix.target }}.zip
+            bin/utm-adapter-${{ matrix.target }}.tar.gz
+            bin/utm-adapter-${{ matrix.target }}.*.sha256
+          if-no-files-found: error
+          retention-days: 30
