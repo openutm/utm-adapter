@@ -69,6 +69,8 @@ The [Desktop binaries workflow](https://github.com/openutm/utm-adapter/actions/w
 
 The separate [Tests workflow](https://github.com/openutm/utm-adapter/actions/workflows/tests.yml) runs backend tests with the race detector, Go vet, and Svelte/TypeScript checks on pull requests and pushes to `main`. It does not package desktop binaries or upload artifacts.
 
+Linux CI installs only required native packages from Ubuntu's official HTTPS repositories and caches downloaded packages. APT still refreshes package indexes on every run; the cache is refreshed weekly or when the dependency script changes.
+
 Open a successful binary build run and download its **Artifacts** (GitHub sign-in required). Each contains an archive and SHA-256 checksum:
 
 | Artifact | Contents | Runtime requirements |
