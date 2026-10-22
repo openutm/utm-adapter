@@ -65,7 +65,11 @@ Packaging installs locked frontend dependencies, generates TypeScript bindings, 
 
 ### Download CI builds
 
-The [Desktop binaries workflow](https://github.com/openutm/utm-adapter/actions/workflows/desktop.yml) tests and builds every push to `main` and `codex/*`, every pull request, and manual runs. Open a successful run and download its **Artifacts** (GitHub sign-in required). Each contains an archive and SHA-256 checksum:
+The [Desktop binaries workflow](https://github.com/openutm/utm-adapter/actions/workflows/desktop.yml) builds only on tag pushes (including release tags) or manual runs. Branch pushes and pull requests never build binaries automatically. To build a pull request on demand, manually run **Desktop binaries** against its source branch using the Actions UI or `gh workflow run desktop.yml --ref <source-branch>`. GitHub exposes manual workflows through the UI/CLI once the workflow is on the default branch.
+
+The separate [Tests workflow](https://github.com/openutm/utm-adapter/actions/workflows/tests.yml) runs backend tests with the race detector, Go vet, and Svelte/TypeScript checks on pull requests and pushes to `main`. It does not package desktop binaries or upload artifacts.
+
+Open a successful binary build run and download its **Artifacts** (GitHub sign-in required). Each contains an archive and SHA-256 checksum:
 
 | Artifact | Contents | Runtime requirements |
 | --- | --- | --- |

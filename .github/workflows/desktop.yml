@@ -2,8 +2,7 @@ name: Desktop binaries
 
 on:
   push:
-    branches: [main, 'codex/**']
-  pull_request:
+    tags: ['**']
   workflow_dispatch:
 
 permissions:
