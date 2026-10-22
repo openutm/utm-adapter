@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -249,13 +250,20 @@ func TestConfigDoesNotPersistCredentials(t *testing.T) {
 	if e := SaveConfig(path, c); e != nil {
 		t.Fatal(e)
 	}
-	data, _ := os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if bytes.Contains(data, []byte("secret")) {
 		t.Fatal("secret persisted")
 	}
-	info, _ := os.Stat(path)
-	if info.Mode().Perm() != 0600 {
-		t.Fatal("wrong config permissions")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Windows Chmod only controls the read-only attribute, not Unix permissions.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
+		t.Fatalf("wrong config permissions: got %04o, want 0600", info.Mode().Perm())
 	}
 	if c.Publish = true; c.Validate() == nil {
 		t.Fatal("allowed publication without identity")
