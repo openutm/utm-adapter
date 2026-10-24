@@ -9,12 +9,15 @@ on:
       - '.github/workflows/desktop.yml'
       - 'build/gcs-versions.json'
       - 'cmd/mission-planner-plugin/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'frontend/package.json'
       - 'integrations/**'
-      - 'internal/adapter/gcsconfigure*'
-      - 'internal/adapter/native/**'
+      - 'internal/adapter/**'
       - 'scripts/*gcs*'
       - 'scripts/*qgc*'
       - 'scripts/*mission-planner*'
+      - 'scripts/*mission_planner*'
 
 permissions:
   contents: read
