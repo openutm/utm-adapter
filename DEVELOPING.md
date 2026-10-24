@@ -238,6 +238,11 @@ AppImage. Upstream is checked out at the workspace root because its composite
 actions resolve nested actions and scripts relative to that directory; this
 adapter is checked out into `adapter/`.
 
+The packaged-app integration test first runs upstream's boot verification, then
+starts the real application event loop with temporary configuration directories
+and requires the custom overlay to fetch a restriction polygon from a local HTTP
+fixture. This catches missing custom resources in otherwise bootable packages.
+
 The Windows job downloads the checksum-pinned Mission Planner ZIP, compiles the
 same C# source used by the application, creates a plugin ZIP, then loads that
 ZIP's DLL and checks its version, initialization and unload using Windows

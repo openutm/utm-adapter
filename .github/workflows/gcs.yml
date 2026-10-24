@@ -145,11 +145,11 @@ jobs:
       - name: Mount macOS package for smoke test
         if: runner.os == 'macOS'
         run: hdiutil attach "$RUNNER_TEMP/build/QGroundControl.dmg" -mountpoint "$RUNNER_TEMP/qgc-dmg" -nobrowse
-      - name: Boot packaged QGC
-        uses: ./.github/actions/verify-executable
-        with:
-          binary-path: ${{ runner.os == 'macOS' && format('{0}/qgc-dmg/QGroundControl.app/Contents/MacOS/QGroundControl', runner.temp) || runner.os == 'Windows' && format('{0}/qgc-install-test/bin/QGroundControl.exe', runner.temp) || format('{0}/build/QGroundControl-x86_64.AppImage', runner.temp) }}
-          expect-archs: ${{ runner.os == 'macOS' && 'x86_64h arm64' || '' }}
+      - name: Boot packaged QGC and verify custom restriction feed
+        env:
+          QGC_BINARY: ${{ runner.os == 'macOS' && format('{0}/qgc-dmg/QGroundControl.app/Contents/MacOS/QGroundControl', runner.temp) || runner.os == 'Windows' && format('{0}/qgc-install-test/bin/QGroundControl.exe', runner.temp) || format('{0}/build/QGroundControl-x86_64.AppImage', runner.temp) }}
+          QGC_ARCHS: ${{ runner.os == 'macOS' && 'x86_64h arm64' || '' }}
+        run: python3 adapter/scripts/test_qgc_package.py --qgc-source . --binary "$QGC_BINARY" --expect-archs "$QGC_ARCHS"
       - name: Stage packages, provenance and checksums
         env:
           TARGET: ${{ matrix.target }}
