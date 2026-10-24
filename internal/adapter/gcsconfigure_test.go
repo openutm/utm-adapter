@@ -196,7 +196,7 @@ func TestMissionPlannerPluginCompilation(t *testing.T) {
 		t.Fatal(err)
 	}
 	args := []string{"-nologo", "-target:library", "-langversion:5", "-out:" + filepath.Join(dir, "OpenUTMAdapter.dll")}
-	for _, name := range []string{"MissionPlanner.exe", "MissionPlanner.ArduPilot.dll", "MissionPlanner.Comms.dll", "MissionPlanner.Utilities.dll", "MissionPlanner.Controls.dll", "MAVLink.dll", "GMap.NET.Core.dll", "GMap.NET.Drawing.dll", "GMap.NET.WindowsForms.dll", "Newtonsoft.Json.dll"} {
+	for _, name := range []string{"MissionPlanner.exe", "MissionPlanner.ArduPilot.dll", "MissionPlanner.Comms.dll", "MissionPlanner.Utilities.dll", "MissionPlanner.Controls.dll", "Interfaces.dll", "MAVLink.dll", "GMap.NET.Core.dll", "GMap.NET.Drawing.dll", "GMap.NET.WindowsForms.dll", "Newtonsoft.Json.dll"} {
 		args = append(args, "-r:"+filepath.Join(os.Getenv("UTM_TEST_MP_DIRECTORY"), name))
 	}
 	if references := os.Getenv("UTM_TEST_MP_FRAMEWORK"); references != "" {
