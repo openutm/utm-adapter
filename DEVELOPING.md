@@ -252,10 +252,10 @@ powershell.exe -NoProfile -File scripts/test_mission_planner_package.ps1 -Archiv
 
 Dispatch **GCS builds** for integration packages alone, or **Desktop binaries**
 for the complete release set without publishing. Its `packages` input also accepts
-`adapter`, `gcs`, `qgroundcontrol` or `mission-planner` for focused builds. Full
+`adapter`, `gcs`, `qgroundcontrol` or `mission-planner` for focused builds.
 QGC builds default to every platform; `gcs-target` selects one platform for manual
 retests (for example `-f packages=qgroundcontrol -f gcs-target=windows-amd64`).
-manual runs verify the combined release checksums and assemble integration sources.
+Full manual runs verify the combined release checksums and assemble integration sources.
 Relevant pull requests also run
 GCS builds. A matching `v<version>` tag runs both matrices and publishes only
 after every job succeeds. All packages and their provenance manifests have
