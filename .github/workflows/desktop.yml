@@ -4,23 +4,33 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      packages:
+        description: Packages to build (manual runs do not publish a release)
+        type: choice
+        default: all
+        options: [all, adapter, gcs, qgroundcontrol, mission-planner]
 
 permissions:
   contents: read
 
 concurrency:
-  group: desktop-${{ github.ref }}
+  group: desktop-${{ github.ref }}-${{ inputs.packages || 'all' }}
   cancel-in-progress: true
 
 jobs:
   gcs:
     name: GCS packages
+    if: inputs.packages != 'adapter'
     uses: ./.github/workflows/gcs.yml
+    with:
+      component: ${{ (inputs.packages == 'qgroundcontrol' || inputs.packages == 'mission-planner') && inputs.packages || 'all' }}
     permissions:
       contents: read
       actions: read
 
   build:
+    if: inputs.packages == '' || inputs.packages == 'all' || inputs.packages == 'adapter'
     name: ${{ matrix.target }}
     strategy:
       fail-fast: false

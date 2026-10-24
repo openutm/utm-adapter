@@ -2,7 +2,17 @@ name: GCS builds
 
 on:
   workflow_call:
+    inputs:
+      component:
+        type: string
+        default: all
   workflow_dispatch:
+    inputs:
+      component:
+        description: GCS packages to build
+        type: choice
+        default: all
+        options: [all, qgroundcontrol, mission-planner]
   pull_request:
     paths:
       - '.github/workflows/gcs.yml'
@@ -25,6 +35,7 @@ permissions:
 
 jobs:
   pins:
+    if: inputs.component != 'mission-planner'
     runs-on: ubuntu-24.04
     outputs:
       qgc-ref: ${{ steps.pins.outputs.qgc-ref }}
@@ -39,6 +50,7 @@ jobs:
   qgroundcontrol:
     name: QGroundControl (${{ matrix.target }})
     needs: pins
+    if: inputs.component != 'mission-planner'
     strategy:
       fail-fast: false
       matrix:
@@ -152,6 +164,7 @@ jobs:
 
   mission-planner:
     name: Mission Planner plugin (Windows x64)
+    if: inputs.component != 'qgroundcontrol'
     runs-on: windows-2025
     timeout-minutes: 30
     defaults:

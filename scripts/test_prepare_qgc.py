@@ -13,8 +13,6 @@ class PrepareQGC(unittest.TestCase):
     def test_resource_wiring_and_overwrite_protection(self):
         with tempfile.TemporaryDirectory() as temporary:
             source = Path(temporary)
-            (source / 'custom-example/src').mkdir(parents=True)
-            (source / 'custom-example/custom.qrc').write_text('<RCC><qresource prefix="/Custom/qml"><file alias="QGroundControl/FlyView/FlyViewCustomLayer.qml">src/FlyViewCustomLayer.qml</file></qresource></RCC>')
             (source / 'src/FlyView').mkdir(parents=True)
             (source / 'src/API').mkdir()
             (source / 'src/API/QGCCorePlugin.h').touch()

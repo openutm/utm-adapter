@@ -17,7 +17,7 @@ $framework = Get-ChildItem "${env:ProgramFiles(x86)}/Reference Assemblies/Micros
     Sort-Object Name -Descending | Select-Object -First 1
 if (-not $framework) { throw '.NET Framework reference assemblies with netstandard facade are required' }
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-$arguments = @('/nologo', '/target:library', '/langversion:5', '/codepage:65001', "/out:$binary")
+$arguments = @('/nologo', '/noconfig', '/nostdlib+', '/target:library', '/langversion:5', '/codepage:65001', "/out:$binary")
 foreach ($name in @('MissionPlanner.exe', 'MissionPlanner.ArduPilot.dll', 'MissionPlanner.Comms.dll', 'MissionPlanner.Utilities.dll', 'MissionPlanner.Controls.dll', 'MAVLink.dll', 'GMap.NET.Core.dll', 'GMap.NET.Drawing.dll', 'GMap.NET.WindowsForms.dll', 'Newtonsoft.Json.dll')) {
     $arguments += "/reference:$(Join-Path $MissionPlannerDirectory $name)"
 }

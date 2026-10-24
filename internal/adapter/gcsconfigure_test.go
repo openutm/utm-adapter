@@ -200,6 +200,7 @@ func TestMissionPlannerPluginCompilation(t *testing.T) {
 		args = append(args, "-r:"+filepath.Join(os.Getenv("UTM_TEST_MP_DIRECTORY"), name))
 	}
 	if references := os.Getenv("UTM_TEST_MP_FRAMEWORK"); references != "" {
+		args = append(args, "-noconfig", "-nostdlib+")
 		for _, name := range []string{"mscorlib.dll", "System.dll", "System.Core.dll", "System.Drawing.dll", "System.Windows.Forms.dll", "System.Xml.dll", "Facades/netstandard.dll"} {
 			args = append(args, "-r:"+filepath.Join(references, name))
 		}
