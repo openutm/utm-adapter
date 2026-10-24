@@ -21,8 +21,8 @@ class PackageGCS(unittest.TestCase):
                 source.write_bytes(b'packaged upstream application')
                 artifact = module.package('qgroundcontrol', target, source, root / target, 'adapter-sha')
                 self.assertEqual(source.read_bytes(), artifact.read_bytes())
-                self.assertEqual(artifact.with_name(artifact.name + '.sha256').read_text(),
-                                 f'{hashlib.sha256(artifact.read_bytes()).hexdigest()}  {artifact.name}\n')
+                self.assertEqual(artifact.with_name(artifact.name + '.sha256').read_bytes(),
+                                 f'{hashlib.sha256(artifact.read_bytes()).hexdigest()}  {artifact.name}\n'.encode('utf-8'))
                 manifest = json.loads(next(artifact.parent.glob('*.build.json')).read_text())
                 self.assertEqual(manifest['target'], target)
                 self.assertEqual(manifest['adapterCommit'], 'adapter-sha')

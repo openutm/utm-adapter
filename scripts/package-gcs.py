@@ -40,14 +40,16 @@ def package(component, target, source, output, commit):
                 archive.write(source / name, name)
             archive.writestr('build.json', json.dumps(manifest, indent=2) + '\n')
     provenance = output / (stem + '.build.json')
-    provenance.write_text(json.dumps(manifest, indent=2) + '\n')
+    provenance.write_bytes((json.dumps(manifest, indent=2) + '\n').encode('utf-8'))
     for path in [artifact, provenance]:
         with path.open('rb') as stream:
             checksum = hashlib.sha256()
             for chunk in iter(lambda: stream.read(1024 * 1024), b''):
                 checksum.update(chunk)
             digest = checksum.hexdigest()
-        path.with_name(path.name + '.sha256').write_text(f'{digest}  {path.name}\n')
+        # Always use LF: Windows text mode otherwise makes Unix checksum tools
+        # treat a trailing carriage return as part of the download filename.
+        path.with_name(path.name + '.sha256').write_bytes(f'{digest}  {path.name}\n'.encode('utf-8'))
     return artifact
 
 

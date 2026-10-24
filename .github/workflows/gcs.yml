@@ -155,6 +155,8 @@ jobs:
       - name: Unmount macOS package
         if: always() && runner.os == 'macOS'
         run: hdiutil detach "$RUNNER_TEMP/qgc-dmg" || true
+      - name: Verify portable download checksums
+        run: cd adapter/bin/gcs && sha256sum --check ./*.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: utm-adapter-gcs-qgroundcontrol-${{ matrix.target }}
@@ -175,6 +177,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Test package generation
+        run: python -m unittest discover -s scripts -p 'test_*.py'
       - name: Download and verify pinned Mission Planner release
         run: |
           $pin = (Get-Content build/gcs-versions.json -Raw | ConvertFrom-Json).missionPlanner
@@ -196,6 +200,9 @@ jobs:
           if ($archive.Count -ne 1) { throw 'Expected exactly one plugin archive' }
           powershell.exe -NoProfile -File scripts/test_mission_planner_package.ps1 -Archive $archive[0].FullName -MissionPlannerDirectory "$env:RUNNER_TEMP/MissionPlanner"
           if ($LASTEXITCODE -ne 0) { throw 'Packaged plugin integration test failed' }
+      - name: Verify portable download checksums
+        shell: bash
+        run: cd bin/gcs && sha256sum --check ./*.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: utm-adapter-gcs-mission-planner-windows-amd64
