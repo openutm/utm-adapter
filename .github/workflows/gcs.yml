@@ -152,9 +152,11 @@ jobs:
         run: |
           $installers = @(Get-ChildItem "$env:RUNNER_TEMP/build" -Filter '*installer*.exe')
           if ($installers.Count -ne 1) { throw 'Expected exactly one QGC installer' }
-          $destination = "$env:RUNNER_TEMP/qgc-install-test"
+          # NSIS /D requires a native path; forward slashes can be discarded.
+          $destination = Join-Path $env:RUNNER_TEMP 'qgc-install-test'
           $process = Start-Process $installers[0].FullName -ArgumentList '/S', "/D=$destination" -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
+          if (!(Test-Path (Join-Path $destination 'bin\QGroundControl.exe'))) { throw "Installed QGC executable missing from $destination" }
       - name: Mount macOS package for smoke test
         if: runner.os == 'macOS'
         run: hdiutil attach "$RUNNER_TEMP/build/QGroundControl.dmg" -mountpoint "$RUNNER_TEMP/qgc-dmg" -nobrowse
