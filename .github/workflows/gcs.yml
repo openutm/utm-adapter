@@ -6,6 +6,9 @@ on:
       component:
         type: string
         default: all
+      target:
+        type: string
+        default: all
   workflow_dispatch:
     inputs:
       component:
@@ -13,6 +16,11 @@ on:
         type: choice
         default: all
         options: [all, qgroundcontrol, mission-planner]
+      target:
+        description: QGroundControl platform
+        type: choice
+        default: all
+        options: [all, linux-amd64, windows-amd64, macos-universal]
   pull_request:
     paths:
       - '.github/workflows/gcs.yml'
@@ -40,12 +48,22 @@ jobs:
     outputs:
       qgc-ref: ${{ steps.pins.outputs.qgc-ref }}
       qgc-repository: ${{ steps.pins.outputs.qgc-repository }}
+      qgc-matrix: ${{ steps.pins.outputs.qgc-matrix }}
     steps:
       - uses: actions/checkout@v4
       - id: pins
+        env:
+          QGC_TARGET: ${{ inputs.target || 'all' }}
         run: |
           echo "qgc-ref=$(jq -r .qgroundcontrol.commit build/gcs-versions.json)" >> "$GITHUB_OUTPUT"
           echo "qgc-repository=$(jq -r .qgroundcontrol.repository build/gcs-versions.json)" >> "$GITHUB_OUTPUT"
+          matrix=$(jq -cn --arg target "$QGC_TARGET" '[
+            {runner:"ubuntu-24.04",host:"linux",arch:"linux_gcc_64",target:"linux-amd64"},
+            {runner:"windows-2022",host:"windows",arch:"win64_msvc2022_64",target:"windows-amd64"},
+            {runner:"macos-15",host:"mac",arch:"clang_64",target:"macos-universal"}
+          ] | map(select($target == "all" or .target == $target)) | {include: .}')
+          test "$(echo "$matrix" | jq '.include | length')" -gt 0
+          echo "qgc-matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   qgroundcontrol:
     name: QGroundControl (${{ matrix.target }})
@@ -53,20 +71,7 @@ jobs:
     if: inputs.component != 'mission-planner'
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-24.04
-            host: linux
-            arch: linux_gcc_64
-            target: linux-amd64
-          - runner: windows-2022
-            host: windows
-            arch: win64_msvc2022_64
-            target: windows-amd64
-          - runner: macos-15
-            host: mac
-            arch: clang_64
-            target: macos-universal
+      matrix: ${{ fromJSON(needs.pins.outputs.qgc-matrix) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     defaults:

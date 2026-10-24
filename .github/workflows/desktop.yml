@@ -10,12 +10,17 @@ on:
         type: choice
         default: all
         options: [all, adapter, gcs, qgroundcontrol, mission-planner]
+      gcs-target:
+        description: QGroundControl platform (manual builds only)
+        type: choice
+        default: all
+        options: [all, linux-amd64, windows-amd64, macos-universal]
 
 permissions:
   contents: read
 
 concurrency:
-  group: desktop-${{ github.ref }}-${{ inputs.packages || 'all' }}
+  group: desktop-${{ github.ref }}-${{ inputs.packages || 'all' }}-${{ inputs.gcs-target || 'all' }}
   cancel-in-progress: true
 
 jobs:
@@ -25,6 +30,7 @@ jobs:
     uses: ./.github/workflows/gcs.yml
     with:
       component: ${{ (inputs.packages == 'qgroundcontrol' || inputs.packages == 'mission-planner') && inputs.packages || 'all' }}
+      target: ${{ inputs.gcs-target || 'all' }}
     permissions:
       contents: read
       actions: read
@@ -142,7 +148,7 @@ jobs:
 
   release:
     name: Verify release downloads
-    if: inputs.packages == '' || inputs.packages == 'all'
+    if: (inputs.packages == '' || inputs.packages == 'all') && (inputs.gcs-target == '' || inputs.gcs-target == 'all')
     needs: [build, gcs]
     runs-on: ubuntu-24.04
     permissions:
