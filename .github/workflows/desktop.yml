@@ -141,8 +141,8 @@ jobs:
           retention-days: 30
 
   release:
-    name: Publish verified downloads
-    if: startsWith(github.ref, 'refs/tags/v')
+    name: Verify release downloads
+    if: inputs.packages == '' || inputs.packages == 'all'
     needs: [build, gcs]
     runs-on: ubuntu-24.04
     permissions:
@@ -154,15 +154,19 @@ jobs:
           pattern: utm-adapter-*
           merge-multiple: true
           path: release
-      - name: Verify checksums and publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+      - name: Verify checksums and assemble integration sources
         run: |
           cd release
           sha256sum --check ./*.sha256
           cp ../COMPATIBILITY.md release-notes.md
           tar -czf utm-adapter-gcs-integrations.tar.gz -C .. integrations scripts/prepare-qgc.py build/gcs-versions.json
           sha256sum utm-adapter-gcs-integrations.tar.gz > utm-adapter-gcs-integrations.tar.gz.sha256
+      - name: Publish verified downloads
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cd release
           gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "UTM Adapter $RELEASE_TAG" --notes-file release-notes.md ./*.zip ./*.tar.gz ./*.exe ./*.AppImage ./*.dmg ./*.build.json ./*.sha256
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false

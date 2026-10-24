@@ -183,9 +183,9 @@ Linux CI installs native dependencies through [build/ci/install-linux-deps.sh](b
 
 The existing preview notes record successful QGroundControl 5.1.4 automatic setup and forwarding on macOS with synthetic MAVLink, direct UDP, TCP integration tests, an HTTP Flight Blender test server, and checks against Flight Blender's telemetry dataclass parser. These are separate from live operational validation.
 
-Live authenticated Flight Blender delivery, real autopilots, serial hardware, and Mission Planner runtime integration still need trials. The generated Mission Planner plugin compiles against official 1.3.83 assemblies using C# 5 and .NET Framework reference assemblies; Windows CI repeats that check. Runtime loading on Windows still needs validation. Record the OS, GCS version, transport, and receiving Flight Blender version when extending that coverage.
+Live authenticated Flight Blender delivery, real autopilots, serial hardware, and connected Mission Planner UI integration still need trials. The generated Mission Planner plugin compiles against official 1.3.83 assemblies using C# 5 and .NET Framework reference assemblies; Windows CI also loads, initializes and unloads the packaged DLL. Record the OS, GCS version, transport, and receiving Flight Blender version when extending that coverage.
 
-Declaration creation and planning remain external. Publisher signing, auto-updates, login startup and compiled custom QGC distribution remain outside this release. Session archives, optional Aerobridge registry/log integration, map overlay sources and installer packaging are implemented in 0.2.0.
+Declaration creation and planning remain external. Publisher signing, auto-updates and login startup remain outside this release. Session archives, optional Aerobridge registry/log integration, map overlays, compiled custom QGC distribution and installer packaging are implemented in 0.2.0.
 
 ## Session workflow and integration verification (0.2.0)
 
@@ -251,7 +251,10 @@ powershell.exe -NoProfile -File scripts/test_mission_planner_package.ps1 -Archiv
 ```
 
 Dispatch **GCS builds** for integration packages alone, or **Desktop binaries**
-for the complete release set without publishing. Relevant pull requests also run
+for the complete release set without publishing. Its `packages` input also accepts
+`adapter`, `gcs`, `qgroundcontrol` or `mission-planner` for focused builds. Full
+manual runs verify the combined release checksums and assemble integration sources.
+Relevant pull requests also run
 GCS builds. A matching `v<version>` tag runs both matrices and publishes only
 after every job succeeds. All packages and their provenance manifests have
 SHA-256 checksums. No signing secrets are required; macOS uses ad-hoc signing.
