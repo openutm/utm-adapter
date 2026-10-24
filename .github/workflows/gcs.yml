@@ -1,0 +1,188 @@
+name: GCS builds
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/gcs.yml'
+      - '.github/workflows/desktop.yml'
+      - 'build/gcs-versions.json'
+      - 'cmd/mission-planner-plugin/**'
+      - 'integrations/**'
+      - 'internal/adapter/gcsconfigure*'
+      - 'internal/adapter/native/**'
+      - 'scripts/*gcs*'
+      - 'scripts/*qgc*'
+      - 'scripts/*mission-planner*'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  pins:
+    runs-on: ubuntu-24.04
+    outputs:
+      qgc-ref: ${{ steps.pins.outputs.qgc-ref }}
+      qgc-repository: ${{ steps.pins.outputs.qgc-repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pins
+        run: |
+          echo "qgc-ref=$(jq -r .qgroundcontrol.commit build/gcs-versions.json)" >> "$GITHUB_OUTPUT"
+          echo "qgc-repository=$(jq -r .qgroundcontrol.repository build/gcs-versions.json)" >> "$GITHUB_OUTPUT"
+
+  qgroundcontrol:
+    name: QGroundControl (${{ matrix.target }})
+    needs: pins
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            host: linux
+            arch: linux_gcc_64
+            target: linux-amd64
+          - runner: windows-2022
+            host: windows
+            arch: win64_msvc2022_64
+            target: windows-amd64
+          - runner: macos-15
+            host: mac
+            arch: clang_64
+            target: macos-universal
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Upstream composite actions expect QGC at GITHUB_WORKSPACE, including nested actions.
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ needs.pins.outputs.qgc-repository }}
+          ref: ${{ needs.pins.outputs.qgc-ref }}
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          path: adapter
+          persist-credentials: false
+      - name: Verify pinned upstream and prepare minimal overlay
+        env:
+          QGC_REF: ${{ needs.pins.outputs.qgc-ref }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$QGC_REF"
+          python3 adapter/scripts/prepare-qgc.py .
+          python3 -m unittest discover -s adapter/scripts -p 'test_*.py'
+      - name: Set up upstream Qt, compiler and build tools
+        uses: ./.github/actions/build-setup
+        with:
+          qt-host: ${{ matrix.host }}
+          qt-arch: ${{ matrix.arch }}
+          build-type: Release
+          cache-variant: openutm
+          aqt-source: git+https://github.com/miurahr/aqtinstall.git@8d961e61720b3c06583517fbc68d57ec0a4e9f95
+      - uses: ./.github/actions/install-dependencies
+        with:
+          nsis: ${{ runner.os == 'Windows' && 'true' || 'false' }}
+      - name: Test native restriction map
+        env:
+          QSG_RHI_BACKEND: software
+        run: |
+          qmllint adapter/integrations/qgroundcontrol/AdapterRestrictions.qml
+          qmltestrunner -platform offscreen -input adapter/integrations/qgroundcontrol/tests
+      - uses: ./.github/actions/cmake-configure
+        with:
+          build-dir: ${{ runner.temp }}/build
+          stable: 'true'
+          extra-args: >-
+            -DQGC_CUSTOM_DIR=custom-openutm-adapter
+            -DQGC_BUILD_TESTING=OFF
+            -DQGC_MACOS_SIGN_WITH_IDENTITY=OFF
+      - uses: ./.github/actions/cmake-build
+        with:
+          build-dir: ${{ runner.temp }}/build
+          parallel-jobs: '3'
+      - uses: ./.github/actions/cmake-install
+        with:
+          build-dir: ${{ runner.temp }}/build
+      - name: Install Windows package for smoke test
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem "$env:RUNNER_TEMP/build" -Filter '*installer*.exe')
+          if ($installers.Count -ne 1) { throw 'Expected exactly one QGC installer' }
+          $destination = "$env:RUNNER_TEMP/qgc-install-test"
+          $process = Start-Process $installers[0].FullName -ArgumentList '/S', "/D=$destination" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
+      - name: Mount macOS package for smoke test
+        if: runner.os == 'macOS'
+        run: hdiutil attach "$RUNNER_TEMP/build/QGroundControl.dmg" -mountpoint "$RUNNER_TEMP/qgc-dmg" -nobrowse
+      - name: Boot packaged QGC
+        uses: ./.github/actions/verify-executable
+        with:
+          binary-path: ${{ runner.os == 'macOS' && format('{0}/qgc-dmg/QGroundControl.app/Contents/MacOS/QGroundControl', runner.temp) || runner.os == 'Windows' && format('{0}/qgc-install-test/bin/QGroundControl.exe', runner.temp) || format('{0}/build/QGroundControl-x86_64.AppImage', runner.temp) }}
+          expect-archs: ${{ runner.os == 'macOS' && 'x86_64h arm64' || '' }}
+      - name: Stage packages, provenance and checksums
+        env:
+          TARGET: ${{ matrix.target }}
+          ADAPTER_COMMIT: ${{ github.sha }}
+        run: |
+          case "$RUNNER_OS" in
+            macOS) package="$RUNNER_TEMP/build/QGroundControl.dmg" ;;
+            Linux) package="$RUNNER_TEMP/build/QGroundControl-x86_64.AppImage" ;;
+            Windows) package=$(find "$RUNNER_TEMP/build" -maxdepth 1 -iname '*installer*.exe' -print -quit) ;;
+          esac
+          python3 adapter/scripts/package-gcs.py --component qgroundcontrol --target "$TARGET" --input "$package" --output adapter/bin/gcs --adapter-commit "$ADAPTER_COMMIT"
+      - name: Unmount macOS package
+        if: always() && runner.os == 'macOS'
+        run: hdiutil detach "$RUNNER_TEMP/qgc-dmg" || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: utm-adapter-gcs-qgroundcontrol-${{ matrix.target }}
+          path: adapter/bin/gcs/*
+          if-no-files-found: error
+          retention-days: 30
+
+  mission-planner:
+    name: Mission Planner plugin (Windows x64)
+    runs-on: windows-2025
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Download and verify pinned Mission Planner release
+        run: |
+          $pin = (Get-Content build/gcs-versions.json -Raw | ConvertFrom-Json).missionPlanner
+          $archive = "$env:RUNNER_TEMP/MissionPlanner.zip"
+          Invoke-WebRequest $pin.url -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne $pin.sha256) { throw 'Mission Planner checksum mismatch' }
+          Expand-Archive $archive -DestinationPath "$env:RUNNER_TEMP/MissionPlanner"
+      - name: Build release plugin using production generator
+        run: ./scripts/build-mission-planner.ps1 -MissionPlannerDirectory "$env:RUNNER_TEMP/MissionPlanner" -OutputDirectory bin/mission-planner
+      - name: Package plugin and source with provenance
+        env:
+          ADAPTER_COMMIT: ${{ github.sha }}
+        run: |
+          python scripts/package-gcs.py --component missionPlanner --target windows-amd64 --input bin/mission-planner --output bin/gcs --adapter-commit "$env:ADAPTER_COMMIT"
+          if ($LASTEXITCODE -ne 0) { throw 'Plugin packaging failed' }
+      - name: Load and initialize the packaged DLL against Mission Planner
+        run: |
+          $archive = @(Get-ChildItem bin/gcs -Filter '*.zip')
+          if ($archive.Count -ne 1) { throw 'Expected exactly one plugin archive' }
+          powershell.exe -NoProfile -File scripts/test_mission_planner_package.ps1 -Archive $archive[0].FullName -MissionPlannerDirectory "$env:RUNNER_TEMP/MissionPlanner"
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged plugin integration test failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: utm-adapter-gcs-mission-planner-windows-amd64
+          path: bin/gcs/*
+          if-no-files-found: error
+          retention-days: 30

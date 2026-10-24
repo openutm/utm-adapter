@@ -46,32 +46,42 @@ type Activity struct {
 	Message string    `json:"message"`
 }
 type Snapshot struct {
-	Config      Config     `json:"config"`
-	ConfigPath  string     `json:"configPath"`
-	Running     bool       `json:"running"`
-	Blender     Link       `json:"blender"`
-	Access      Link       `json:"access"`
-	Telemetry   Link       `json:"telemetry"`
-	Delivery    Link       `json:"delivery"`
-	Vehicles    []Vehicle  `json:"vehicles"`
-	GCS         []GCS      `json:"gcs"`
-	Events      []Activity `json:"events"`
-	Frames      uint64     `json:"frames"`
-	ParseErrors uint64     `json:"parseErrors"`
-	Sent        uint64     `json:"sent"`
-	Now         time.Time  `json:"now"`
+	Version      string          `json:"version"`
+	Aerobridge   Link            `json:"aerobridge"`
+	Records      Link            `json:"records"`
+	Restrictions Link            `json:"restrictions"`
+	Sessions     []RecordSummary `json:"sessions"`
+	BridgeURL    string          `json:"bridgeURL"`
+	Config       Config          `json:"config"`
+	ConfigPath   string          `json:"configPath"`
+	Running      bool            `json:"running"`
+	Blender      Link            `json:"blender"`
+	Access       Link            `json:"access"`
+	Telemetry    Link            `json:"telemetry"`
+	Delivery     Link            `json:"delivery"`
+	Vehicles     []Vehicle       `json:"vehicles"`
+	GCS          []GCS           `json:"gcs"`
+	Events       []Activity      `json:"events"`
+	Frames       uint64          `json:"frames"`
+	ParseErrors  uint64          `json:"parseErrors"`
+	Sent         uint64          `json:"sent"`
+	Now          time.Time       `json:"now"`
 }
 type Service struct {
-	op        sync.Mutex
-	mu        sync.Mutex
-	config    Config
-	path      string
-	state     Snapshot
-	vehicles  map[byte]Vehicle
-	node      *gomavlib.Node
-	cancel    context.CancelFunc
-	done      chan struct{}
-	frameDone chan struct{}
+	syncMu      sync.Mutex
+	sessionSent map[string]time.Time
+	records     *Records
+	bridge      *localBridge
+	op          sync.Mutex
+	mu          sync.Mutex
+	config      Config
+	path        string
+	state       Snapshot
+	vehicles    map[byte]Vehicle
+	node        *gomavlib.Node
+	cancel      context.CancelFunc
+	done        chan struct{}
+	frameDone   chan struct{}
 }
 
 func NewService(path string) (*Service, error) {
@@ -83,13 +93,17 @@ func NewService(path string) (*Service, error) {
 	s.state.Events = []Activity{}
 	s.state.GCS = Discover()
 	if raw, e := keyring.Get("org.openutm.adapter", path); e == nil {
-		var secrets struct{ Token, ClientSecret string }
+		var secrets struct{ Token, ClientSecret, AerobridgeToken string }
 		if json.Unmarshal([]byte(raw), &secrets) == nil {
 			s.config.Token = secrets.Token
 			s.config.ClientSecret = secrets.ClientSecret
+			s.config.AerobridgeToken = secrets.AerobridgeToken
 		}
 	}
 	s.resetLinks()
+	if err := s.ensureRecords(); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 func (s *Service) resetLinks() {
@@ -109,11 +123,25 @@ func (s *Service) GetSnapshot() Snapshot {
 	defer s.mu.Unlock()
 	snap := s.state
 	snap.Now = time.Now()
+	snap.Version = Version
+	snap.Sessions = []RecordSummary{}
+	if s.records != nil {
+		var err error
+		snap.Sessions, err = s.records.list(100)
+		if err != nil {
+			snap.Records = linkResult(err, "")
+		}
+	}
+	if s.bridge != nil {
+		snap.BridgeURL = s.bridge.url
+	}
 	snap.Config = s.config
 	snap.Config.HasToken = s.config.Token != ""
 	snap.Config.HasClientSecret = s.config.ClientSecret != ""
 	snap.Config.Token = ""
 	snap.Config.ClientSecret = ""
+	snap.Config.HasAerobridgeToken = s.config.AerobridgeToken != ""
+	snap.Config.AerobridgeToken = ""
 	snap.ConfigPath = s.path
 	snap.Events = append([]Activity{}, s.state.Events...)
 	snap.GCS = append([]GCS{}, s.state.GCS...)
@@ -152,8 +180,11 @@ func (s *Service) ApplyConfig(c Config) error {
 	if e := c.Validate(); e != nil {
 		return e
 	}
-	if c.Token != old.Token || c.ClientSecret != old.ClientSecret {
-		raw, _ := json.Marshal(struct{ Token, ClientSecret string }{c.Token, c.ClientSecret})
+	if c.AerobridgeToken == "" {
+		c.AerobridgeToken = old.AerobridgeToken
+	}
+	if c.Token != old.Token || c.ClientSecret != old.ClientSecret || c.AerobridgeToken != old.AerobridgeToken {
+		raw, _ := json.Marshal(struct{ Token, ClientSecret, AerobridgeToken string }{c.Token, c.ClientSecret, c.AerobridgeToken})
 		if e := keyring.Set("org.openutm.adapter", s.path, string(raw)); e != nil {
 			return fmt.Errorf("cannot save credentials to the OS credential store: %w", e)
 		}
@@ -177,6 +208,8 @@ func (s *Service) ClearCredentials() error {
 	s.mu.Lock()
 	s.config.Token = ""
 	s.config.ClientSecret = ""
+	s.config.AerobridgeToken = ""
+	s.config.AerobridgeEnabled = false
 	s.config.Publish = false
 	c := s.config
 	s.event("Credentials removed; telemetry sending disabled")
@@ -186,6 +219,12 @@ func (s *Service) ClearCredentials() error {
 func (s *Service) Start() error { s.op.Lock(); defer s.op.Unlock(); s.stop(); return s.start() }
 func (s *Service) Stop()        { s.op.Lock(); defer s.op.Unlock(); s.stop() }
 func (s *Service) stop() {
+	if s.bridge != nil {
+		s.bridge.close()
+		s.mu.Lock()
+		s.bridge = nil
+		s.mu.Unlock()
+	}
 	if s.cancel != nil {
 		s.cancel()
 		s.cancel = nil
@@ -208,6 +247,9 @@ func (s *Service) stop() {
 	s.mu.Unlock()
 }
 func (s *Service) start() error {
+	if err := s.ensureRecords(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	c := s.config
 	s.mu.Unlock()
@@ -230,6 +272,14 @@ func (s *Service) start() error {
 		s.mu.Unlock()
 		return e
 	}
+	bridge, err := s.startBridge(c.BridgeAddress)
+	if err != nil {
+		node.Close()
+		return err
+	}
+	s.mu.Lock()
+	s.bridge = bridge
+	s.mu.Unlock()
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 	s.node = node
@@ -237,6 +287,7 @@ func (s *Service) start() error {
 	s.frameDone = make(chan struct{})
 	s.mu.Lock()
 	s.state.Running = true
+	s.sessionSent = map[string]time.Time{}
 	s.vehicles = map[byte]Vehicle{}
 	s.state.Frames = 0
 	s.state.ParseErrors = 0
@@ -315,6 +366,12 @@ func (s *Service) consume(ev gomavlib.Event) {
 			}
 		}
 		s.vehicles[id] = v
+		if _, gps := e.Message().(*common.MessageGpsRawInt); gps && s.records != nil {
+			if err := s.records.append(v); err != nil {
+				s.state.Records = linkResult(err, "")
+				s.event("Telemetry could not be recorded: " + err.Error())
+			}
+		}
 		if !exists {
 			s.event(fmt.Sprintf("Vehicle detected · MAVLink system %d", id))
 		}
@@ -323,6 +380,23 @@ func (s *Service) consume(ev gomavlib.Event) {
 func (s *Service) run(ctx context.Context, c Config, done chan struct{}) {
 	defer close(done)
 	b := NewBlender(c)
+	syncDone := make(chan struct{})
+	go func() {
+		defer close(syncDone)
+		for {
+			s.syncMu.Lock()
+			budget, cancel := context.WithTimeout(ctx, requestBudget)
+			s.syncRecords(budget, b, NewAerobridge(c), c)
+			cancel()
+			s.syncMu.Unlock()
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(10 * time.Second):
+			}
+		}
+	}()
+	defer func() { <-syncDone }()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	checks := 0
@@ -359,7 +433,8 @@ func (s *Service) run(ctx context.Context, c Config, done chan struct{}) {
 			}
 			s.mu.Unlock()
 		}
-		if c.Publish {
+		s.publishSessions(ctx, b, c)
+		if c.Publish && c.DeclarationID != "" && !s.hasActiveSession(c.SystemID) {
 			s.mu.Lock()
 			v, ok := s.vehicles[byte(c.SystemID)]
 			s.mu.Unlock()

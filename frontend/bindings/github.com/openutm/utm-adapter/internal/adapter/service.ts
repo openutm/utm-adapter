@@ -13,8 +13,38 @@ export function ApplyConfig(c: $models.Config): $CancellablePromise<void> {
     return $Call.ByID(2974556148, c);
 }
 
+export function BeginSession(a: $models.Assignment): $CancellablePromise<$models.Session> {
+    return $Call.ByID(3265027169, a);
+}
+
 export function ClearCredentials(): $CancellablePromise<void> {
     return $Call.ByID(682087843);
+}
+
+/**
+ * Close is for process shutdown. Stop only pauses connections.
+ */
+export function Close(): $CancellablePromise<void> {
+    return $Call.ByID(682221518);
+}
+
+export function EndSession(id: string): $CancellablePromise<void> {
+    return $Call.ByID(1813009769, id);
+}
+
+/**
+ * Export is streamed from SQLite, so a long flight does not have to fit in RAM.
+ */
+export function ExportSession(id: string): $CancellablePromise<string> {
+    return $Call.ByID(4174278844, id);
+}
+
+export function GetDeclarations(): $CancellablePromise<$models.Document[] | null> {
+    return $Call.ByID(2212004943);
+}
+
+export function GetFleet(): $CancellablePromise<$models.Fleet> {
+    return $Call.ByID(1940079994);
 }
 
 export function GetSnapshot(): $CancellablePromise<$models.Snapshot> {
@@ -34,4 +64,11 @@ export function Start(): $CancellablePromise<void> {
 
 export function Stop(): $CancellablePromise<void> {
     return $Call.ByID(1890959658);
+}
+
+/**
+ * Synchronize retries durable deliveries without starting a telemetry receiver.
+ */
+export function Synchronize(): $CancellablePromise<void> {
+    return $Call.ByID(3073840824);
 }

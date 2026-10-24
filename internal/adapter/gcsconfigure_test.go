@@ -3,6 +3,7 @@ package adapter
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -179,5 +180,39 @@ func TestExistingConfigDoesNotOptIntoPlugin(t *testing.T) {
 	c, err := LoadConfig(path)
 	if err != nil || c.MissionPlannerPlugin || !c.AutoConfigureGCS {
 		t.Fatal(c, err)
+	}
+}
+
+// Compile the exact generated plugin against an official Mission Planner build.
+// CI supplies the Windows framework compiler; local runs can use dotnet + Roslyn.
+func TestMissionPlannerPluginCompilation(t *testing.T) {
+	compiler := os.Getenv("UTM_TEST_MP_CSC")
+	if compiler == "" {
+		t.Skip("set UTM_TEST_MP_CSC and UTM_TEST_MP_DIRECTORY for native plugin compilation")
+	}
+	dir := t.TempDir()
+	source := filepath.Join(dir, "OpenUTMAdapter.cs")
+	if err := os.WriteFile(source, []byte(missionPlannerPlugin("127.0.0.1:14551")), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"-nologo", "-target:library", "-langversion:5", "-out:" + filepath.Join(dir, "OpenUTMAdapter.dll")}
+	for _, name := range []string{"MissionPlanner.exe", "MissionPlanner.ArduPilot.dll", "MissionPlanner.Comms.dll", "MissionPlanner.Utilities.dll", "MissionPlanner.Controls.dll", "MAVLink.dll", "GMap.NET.Core.dll", "GMap.NET.Drawing.dll", "GMap.NET.WindowsForms.dll", "Newtonsoft.Json.dll"} {
+		args = append(args, "-r:"+filepath.Join(os.Getenv("UTM_TEST_MP_DIRECTORY"), name))
+	}
+	if references := os.Getenv("UTM_TEST_MP_FRAMEWORK"); references != "" {
+		for _, name := range []string{"mscorlib.dll", "System.dll", "System.Core.dll", "System.Drawing.dll", "System.Windows.Forms.dll", "System.Xml.dll", "Facades/netstandard.dll"} {
+			args = append(args, "-r:"+filepath.Join(references, name))
+		}
+	} else {
+		args = append(args, "-r:System.Drawing.dll", "-r:System.Windows.Forms.dll", "-r:System.Xml.dll")
+	}
+	args = append(args, source)
+	if dotnet := os.Getenv("UTM_TEST_MP_DOTNET"); dotnet != "" {
+		args = append([]string{compiler}, args...)
+		compiler = dotnet
+	}
+	output, err := exec.Command(compiler, args...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("native plugin compilation failed: %v\n%s", err, output)
 	}
 }

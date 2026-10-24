@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"bytes"
+	_ "embed"
 	"fmt"
 	"net"
 	"os"
@@ -42,7 +43,7 @@ func configureGCS(c Config, found []GCS) []GCS {
 				g.EnhancementState = "unmanaged"
 				if bytes.HasPrefix(data, []byte("// OpenUTM adapter managed plugin")) {
 					g.EnhancementState = "installed"
-					g.EnhancementVersion = "0.1"
+					g.EnhancementVersion = Version
 				}
 			} else if os.IsNotExist(err) {
 				g.EnhancementState = "absent"
@@ -76,7 +77,7 @@ func configureGCS(c Config, found []GCS) []GCS {
 		if g.ID == "qgroundcontrol" {
 			data, changed, err = qgcForwarding(g.SettingsPath, target)
 		} else {
-			data = []byte(missionPlannerPlugin(target))
+			data = []byte(missionPlannerPluginWithBridge(target, c.BridgeAddress))
 			var previous []byte
 			previous, err = os.ReadFile(g.SettingsPath)
 			if os.IsNotExist(err) {
@@ -115,7 +116,7 @@ func configureGCS(c Config, found []GCS) []GCS {
 		}
 		if g.ID == "mission-planner" {
 			g.EnhancementState = "installed"
-			g.EnhancementVersion = "0.1"
+			g.EnhancementVersion = Version
 		}
 		g.SetupState, g.SetupDetail, g.BackupPath = "ready", "Forwarding configured to "+target+". Open "+g.Name+" to connect.", backup
 	}
@@ -236,9 +237,23 @@ func replaceGCSFile(path string, data []byte) (string, error) {
 
 // Mission Planner's persistent mirror list requires a manual Start click. Its
 // supported source-plugin loader provides startup forwarding without UI driving.
+//
+//go:embed native/Restrictions.cs.txt
+var missionPlannerRestrictions string
+
 func missionPlannerPlugin(target string) string {
+	return missionPlannerPluginWithBridge(target, DefaultConfig().BridgeAddress)
+}
+
+// MissionPlannerPluginSource returns the release plugin using the default local endpoints.
+// Installation through the adapter regenerates the same plugin with the user's endpoints.
+func MissionPlannerPluginSource() string {
+	return missionPlannerPlugin(DefaultConfig().Address)
+}
+
+func missionPlannerPluginWithBridge(target, bridge string) string {
 	host, port, _ := net.SplitHostPort(target)
-	return fmt.Sprintf(`// OpenUTM adapter managed plugin v1; remove this file to uninstall.
+	plugin := fmt.Sprintf(`// OpenUTM adapter managed plugin v2; remove this file to uninstall.
 using System;
 using System.Net;
 using System.Net.Sockets;
@@ -246,10 +261,10 @@ using MissionPlanner;
 namespace OpenUTM {
  public class AdapterForwarder : MissionPlanner.Plugin.Plugin {
   public override string Name { get { return "OpenUTM telemetry forwarder"; } }
-  public override string Version { get { return "0.1"; } }
+  public override string Version { get { return "%s"; } }
   public override string Author { get { return "OpenUTM"; } }
   private UdpClient udp;
-  private MAVLinkInterface source;
+  private readonly System.Collections.Generic.List<MAVLinkInterface> sources = new System.Collections.Generic.List<MAVLinkInterface>();
   private readonly object gate = new object();
   public override bool Init() { loopratehz = 1; return true; }
   public override bool Loaded() {
@@ -258,10 +273,12 @@ namespace OpenUTM {
   }
   public override bool Loop() {
    lock(gate) {
-    if (source != MainV2.comPort) {
-     if (source != null) source.OnPacketReceived -= Forward;
-     source = MainV2.comPort;
-     if (source != null) source.OnPacketReceived += Forward;
+    var current = MainV2.Comports.ToArray();
+    foreach (var source in sources.ToArray()) {
+     if (Array.IndexOf(current, source) < 0) { source.OnPacketReceived -= Forward; sources.Remove(source); }
+    }
+    foreach (var source in current) {
+     if (source != null && !sources.Contains(source)) { source.OnPacketReceived += Forward; sources.Add(source); }
     }
    }
    return true;
@@ -275,8 +292,8 @@ namespace OpenUTM {
   }
   public override bool Exit() {
    lock(gate) {
-    if (source != null) source.OnPacketReceived -= Forward;
-    source = null;
+    foreach (var source in sources) source.OnPacketReceived -= Forward;
+    sources.Clear();
     if (udp != null) udp.Close();
     udp = null;
    }
@@ -284,7 +301,15 @@ namespace OpenUTM {
   }
  }
 }
-`, map[bool]string{true: "InterNetworkV6", false: "InterNetwork"}[strings.Contains(host, ":")], host, port)
+`, Version, map[bool]string{true: "InterNetworkV6", false: "InterNetwork"}[strings.Contains(host, ":")], host, port)
+	plugin = strings.Replace(plugin, "  private UdpClient udp;", "  private AdapterRestrictions restrictions;\n  private UdpClient udp;", 1)
+	if bridge != "" {
+		plugin = strings.Replace(plugin, "   return Loop();", "   restrictions = new AdapterRestrictions(\"http://"+bridge+"\");\n   return Loop();", 1)
+		plugin = strings.Replace(plugin, "  public override bool Loop() {", "  public override bool Loop() {\n   if (restrictions != null) restrictions.Refresh();", 1)
+	}
+	plugin = strings.Replace(plugin, "  public override bool Exit() {", "  public override bool Exit() {\n   if (restrictions != null) restrictions.Close();", 1)
+	plugin = strings.Replace(plugin, "namespace OpenUTM {", "namespace OpenUTM {\n"+missionPlannerRestrictions, 1)
+	return plugin
 }
 
 // Rename to an unloaded backup instead of deleting the user's only copy.

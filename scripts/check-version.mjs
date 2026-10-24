@@ -1,0 +1,11 @@
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const version = JSON.parse(readFileSync('frontend/package.json')).version;
+assert.match(version, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
+assert.ok(readFileSync('internal/adapter/sessions.go','utf8').includes(`const Version = "${version}"`));
+assert.ok(readFileSync('build/config.yml','utf8').includes(`version: "${version}"`));
+assert.equal(JSON.parse(readFileSync('frontend/package-lock.json')).version,version);
+assert.equal(JSON.parse(readFileSync('build/windows/info.json')).fixed.file_version,version);
+for (const file of ['build/darwin/Info.plist','build/darwin/Info.dev.plist']) assert.ok(readFileSync(file,'utf8').includes(`<string>${version}</string>`));
+if (process.env.GITHUB_REF?.startsWith('refs/tags/')) assert.equal(process.env.GITHUB_REF,`refs/tags/v${version}`,'Release tag must match all version metadata');
+console.log(`Version ${version} verified`);

@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      flight-blender-ref:
+        description: 'Optional Flight Blender branch/ref containing the companion adapter API'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -32,11 +37,70 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Verify release version
+        run: node scripts/check-version.mjs
       - name: Backend tests and vet
         run: |
           go test -race ./internal/...
           go vet ./internal/...
+      - name: Compile generated Mission Planner plugin against release 1.3.83
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'MissionPlanner.zip'
+          Invoke-WebRequest 'https://github.com/ArduPilot/MissionPlanner/releases/download/MissionPlanner1.3.83/MissionPlanner-1.3.83.zip' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne 'ff3694f7a9038caf756545049dd7aef74e3d0d8fe3586e87aa881045704dd6f9') { throw 'Mission Planner checksum mismatch' }
+          $env:UTM_TEST_MP_DIRECTORY = Join-Path $env:RUNNER_TEMP 'MissionPlanner'
+          Expand-Archive $archive -DestinationPath $env:UTM_TEST_MP_DIRECTORY
+          $env:UTM_TEST_MP_CSC = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          $framework = Get-ChildItem "${env:ProgramFiles(x86)}/Reference Assemblies/Microsoft/Framework/.NETFramework" -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'Facades/netstandard.dll') } | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $framework) { throw '.NET Framework reference assemblies with netstandard facade are required' }
+          $env:UTM_TEST_MP_FRAMEWORK = $framework.FullName
+          go test ./internal/adapter -run '^TestMissionPlannerPluginCompilation$' -count=1 -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install locked frontend dependencies
         run: npm --prefix frontend ci
       - name: Check Svelte and TypeScript
         run: npm --prefix frontend run check
+
+  native-map:
+    name: Native QGC restriction rendering
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          modules: 'qtlocation qtpositioning'
+          cache: true
+      - name: Verify map rendering and custom-build wiring
+        env:
+          QSG_RHI_BACKEND: software
+        run: |
+          qmllint integrations/qgroundcontrol/AdapterRestrictions.qml
+          qmltestrunner -platform offscreen -input integrations/qgroundcontrol/tests
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+
+  flight-blender-contract:
+    name: Real Flight Blender session contract
+    if: github.event_name == 'workflow_dispatch' && inputs.flight-blender-ref != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: adapter
+      - uses: actions/checkout@v4
+        with:
+          repository: openutm/flight-blender
+          ref: ${{ inputs.flight-blender-ref }}
+          path: flight-blender
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: adapter/go.mod
+      - uses: astral-sh/setup-uv@v6
+      - name: Install server dependencies and test actual application
+        run: |
+          cd flight-blender
+          uv sync --locked
+          cd ../adapter
+          scripts/test-flight-blender.sh

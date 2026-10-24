@@ -142,7 +142,7 @@ Ground station discovery, setup, server health, and API read checks run roughly 
 - `HEARTBEAT` supplies armed state and heartbeat freshness. `GPS_RAW_INT` supplies the delivery position, GPS freshness, fix, speed, course, and MAVLink 2 ellipsoid altitude. `GLOBAL_POSITION_INT` supplies displayed MSL/relative altitude and a position fallback before GPS arrives.
 - Delivery requires heartbeat and GPS no more than five seconds old, a new GPS sample after the last successful send, and populated position, WGS84 altitude, speed, and course. GPS fix types 3–8 are accepted. Unknown speed/course sentinels and missing or zero ellipsoid altitude block delivery; MSL is never substituted for WGS84 altitude.
 - Delivery sends one observation with one current state for the configured declaration, vehicle serial, and operator. Operational status is `Undeclared`; unknown accuracy and unavailable vertical-speed/pressure-altitude values use the sentinels in `Blender.Publish`. Changing these mappings requires checking the receiving Flight Blender contract.
-- A successful send advances the last-sent sample and accepted count. A failed send can be retried while the sample remains fresh. There is no durable queue or historical replay. Vehicle state and counters reset when connections restart.
+- A successful send advances the last-sent sample and accepted count. A failed send can be retried while the sample remains fresh. This legacy live path has no historical replay. Session recording has an independent durable archive queue. Vehicle state and counters reset when connections restart.
 
 The HTTP client uses these endpoints relative to the configured base URL:
 
@@ -153,7 +153,7 @@ The HTTP client uses these endpoints relative to the configured base URL:
 | `GET /flight_declaration_ops/flight_declaration/{UUID}` | Authenticated read access check for the selected declaration. |
 | `PUT /flight_stream/set_telemetry` | Telemetry delivery; successful read access alone does not prove write permission. |
 
-Requests have a six-second timeout, reject redirects, and limit response reads to 1 MiB. OAuth uses client credentials with HTTP Basic client authentication and caches access tokens until 30 seconds before expiry. A missing expiry defaults to 300 seconds; HTTP 401 clears the cached token for a subsequent retry.
+Requests have a six-second timeout, reject redirects, and limit response reads to 8 MiB. OAuth uses client credentials with HTTP Basic client authentication and caches access tokens until 30 seconds before expiry. A missing expiry defaults to 300 seconds; HTTP 401 clears the cached token for a subsequent retry.
 
 ## Ground station changes
 
@@ -161,7 +161,7 @@ Automatic setup only configures local UDP forwarding, skips direct mode, and wai
 
 QGC configuration updates `forwardMavlink=true` and `forwardMavlinkHostName` under `[General]` in `QGroundControl.ini`. The adjacent `.utm-adapter-target` file records an adapter-managed destination so future updates can preserve unrelated forwarding settings.
 
-Mission Planner plugin installation requires explicit opt-in. The generated `plugins/OpenUTMAdapter.cs` forwards received packets to the adapter and follows the primary connection. Files without the managed-plugin marker are preserved. Removal disables the opt-in and renames the managed plugin to an unloaded backup.
+Mission Planner plugin installation requires explicit opt-in. The generated `plugins/OpenUTMAdapter.cs` forwards received packets to the adapter and follows all Mission Planner connections. Files without the managed-plugin marker are preserved. Removal disables the opt-in and renames the managed plugin to an unloaded backup.
 
 Changed existing files are backed up with `.utm-adapter-backup-<timestamp>`. Disabling automatic configuration does not undo earlier changes. See the [user guide's rollback instructions](README.md#settings-credentials-and-undoing-setup).
 
@@ -175,7 +175,7 @@ Changed existing files are backed up with `.utm-adapter-backup-<timestamp>`. Dis
 gh workflow run desktop.yml --ref <source-branch>
 ```
 
-GitHub exposes manual dispatch once the workflow is present on the default branch. The binary workflow tests the backend, builds the app, checks the frontend, and uploads macOS universal, Windows amd64, and Linux amd64 archives with SHA-256 checksums. Artifacts are retained for 30 days; they are not published release installers.
+GitHub exposes manual dispatch once the workflow is present on the default branch. The binary workflow tests the backend, builds the app, checks the frontend, and uploads macOS universal, Windows amd64, and Linux amd64 archives with SHA-256 checksums. Preview artifacts are retained for 30 days. Matching `vX.Y.Z` tags publish verified archives, Windows NSIS installers, Linux AppImages, integration sources, checksums and the compatibility matrix as a GitHub Release.
 
 Linux CI installs native dependencies through [build/ci/install-linux-deps.sh](build/ci/install-linux-deps.sh), using Ubuntu's official HTTPS repositories. Package downloads are cached, indexes refresh each run, and cache keys rotate weekly or when the script changes.
 
@@ -183,6 +183,76 @@ Linux CI installs native dependencies through [build/ci/install-linux-deps.sh](b
 
 The existing preview notes record successful QGroundControl 5.1.4 automatic setup and forwarding on macOS with synthetic MAVLink, direct UDP, TCP integration tests, an HTTP Flight Blender test server, and checks against Flight Blender's telemetry dataclass parser. These are separate from live operational validation.
 
-Live authenticated Flight Blender delivery, real autopilots, serial hardware, and Mission Planner runtime integration still need trials. The Mission Planner plugin has been checked against a local source API but not validated at runtime on Windows. Record the OS, GCS version, transport, and receiving Flight Blender version when extending that coverage.
+Live authenticated Flight Blender delivery, real autopilots, serial hardware, and Mission Planner runtime integration still need trials. The generated Mission Planner plugin compiles against official 1.3.83 assemblies using C# 5 and .NET Framework reference assemblies; Windows CI repeats that check. Runtime loading on Windows still needs validation. Record the OS, GCS version, transport, and receiving Flight Blender version when extending that coverage.
 
-Declaration creation, mapping/planning, Aerobridge/fleet synchronization, release signing and installers, auto-updates, login startup, and the custom OpenUTM QGC build remain outside the implemented preview.
+Declaration creation and planning remain external. Publisher signing, auto-updates, login startup and compiled custom QGC distribution remain outside this release. Session archives, optional Aerobridge registry/log integration, map overlay sources and installer packaging are implemented in 0.2.0.
+
+## Session workflow and integration verification (0.2.0)
+
+`records.go` owns the private SQLite database beside `product.json`. Each immutable session assignment binds a MAVLink system to an aircraft, declaration and pilot. The receiver records every incoming GPS sample while that session is active. `sessions.go` handles start/end, streamed JSON export and synchronization. `sync.go` caches declaration versions and integrates the optional Aerobridge registry/log APIs. `restrictions.go` caches geofences and serves a credential-free loopback GeoJSON feed.
+
+Archive workers persist exact pending payloads before sending, then advance separate Flight Blender / Aerobridge cursors after acknowledgement. Flight Blender stores sequences idempotently. Aerobridge lacks native idempotency keys, so the adapter reconciles `raw_log.adapterBatchKey` before retrying POSTs. This relies on read-after-write visibility and a single adapter owning a session. Active sessions persist through a restart. Ended sessions remain exportable; there is no automatic retention/deletion policy.
+
+Deploy the companion Flight Blender changes and apply `alembic upgrade head`. Its owner-isolated endpoints require read scope for GET and write scope for PUT. Records are owned by token issuer and subject, so use the same service identity for retries. Then run:
+
+```sh
+# Two real UDP aircraft -> durable sessions -> outage -> restart ->
+# authenticated archive/log services -> restriction bridge and JSON export.
+go test -race ./internal/adapter -run '^TestFlightSessionIntegration$' -count=1 -v
+
+# Real UDP -> actual Flight Blender FastAPI + SQLAlchemy -> exported report, isolated
+# in a temporary directory. Requires the sibling server's Python environment.
+FLIGHT_BLENDER_ROOT=../flight-blender scripts/test-flight-blender.sh
+
+node scripts/check-version.mjs
+```
+
+The cross-repository script uses a local JWT-verification bypass only in its isolated server process; Flight Blender's own tests separately enforce real RSA token verification, missing-token failures and wrong-scope failures. It creates schema from ORM metadata; the migration is tested separately in the Flight Blender suite.
+
+For QGC 5.1.4, prepare a **new** custom directory inside its source checkout:
+
+```sh
+python3 scripts/prepare-qgc.py /path/to/qgroundcontrol
+# Configure/build QGC following its native instructions, adding:
+# -DQGC_CUSTOM_DIR=custom-openutm-adapter
+```
+
+This keeps the GCS map native and reads only the adapter's local GeoJSON feed. The preparation script refuses to overwrite an existing directory. To test its native QML component with Qt 6.8+ and Qt Location / Positioning installed:
+
+```sh
+qmllint integrations/qgroundcontrol/AdapterRestrictions.qml
+qmltestrunner -platform offscreen -input integrations/qgroundcontrol/tests
+python3 -m unittest discover -s scripts -p 'test_*.py'
+```
+
+Changing the bridge address requires updating the QML `endpoint` or regenerating the installed Mission Planner plugin through the adapter. The generated Mission Planner source contains its forwarding and map integration; Windows runtime validation remains required. See [COMPATIBILITY.md](COMPATIBILITY.md) for exact coverage.
+
+The Tests workflow accepts an optional `flight-blender-ref` on manual dispatch to run the same real-server contract against a branch containing the companion API. Default checks run the two-aircraft UDP/restart integration test on Linux and Windows, plus native Qt map tests on Linux and generated Mission Planner plugin compilation on Windows.
+
+## GCS build and release CI
+
+The [GCS workflow](.github/workflows/gcs.yml) builds QGroundControl from the commit
+in `build/gcs-versions.json` using that commit's own Qt/dependency/build actions.
+It packages and boots a macOS universal DMG, Windows x64 installer and Linux x64
+AppImage. Upstream is checked out at the workspace root because its composite
+actions resolve nested actions and scripts relative to that directory; this
+adapter is checked out into `adapter/`.
+
+The Windows job downloads the checksum-pinned Mission Planner ZIP, compiles the
+same C# source used by the application, creates a plugin ZIP, then loads that
+ZIP's DLL and checks its version, initialization and unload using Windows
+PowerShell/.NET Framework. This does not replace a connected-aircraft/UI trial.
+To reproduce its packaging from a Windows developer shell:
+
+```powershell
+./scripts/build-mission-planner.ps1 -MissionPlannerDirectory C:/MissionPlanner -OutputDirectory bin/mission-planner
+python scripts/package-gcs.py --component missionPlanner --target windows-amd64 --input bin/mission-planner --output bin/gcs --adapter-commit (git rev-parse HEAD)
+powershell.exe -NoProfile -File scripts/test_mission_planner_package.ps1 -Archive (Get-ChildItem bin/gcs/*.zip).FullName -MissionPlannerDirectory C:/MissionPlanner
+```
+
+Dispatch **GCS builds** for integration packages alone, or **Desktop binaries**
+for the complete release set without publishing. Relevant pull requests also run
+GCS builds. A matching `v<version>` tag runs both matrices and publishes only
+after every job succeeds. All packages and their provenance manifests have
+SHA-256 checksums. No signing secrets are required; macOS uses ad-hoc signing.
+Update the upstream pins and compatibility matrix together when upgrading a GCS.

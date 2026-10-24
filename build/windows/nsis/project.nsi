@@ -22,7 +22,7 @@ Unicode true
 ## !define INFO_PROJECTNAME    "my-project" # Default "utm-adapter"
 ## !define INFO_COMPANYNAME    "OpenUTM" # Default "OpenUTM"
 ## !define INFO_PRODUCTNAME    "My Product Name" # Default "UTM Adapter"
-## !define INFO_PRODUCTVERSION "1.0.0"     # Default "0.1.0"
+## !define INFO_PRODUCTVERSION "1.0.0"     # Default "0.2.0"
 ## !define INFO_COPYRIGHT      "(c) Now, OpenUTM" # Default "© 2026, OpenUTM"
 ###
 ## !define PRODUCT_EXECUTABLE  "Application.exe"      # Default "${INFO_PROJECTNAME}.exe"

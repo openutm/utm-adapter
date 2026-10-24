@@ -57,10 +57,11 @@ func testService(t *testing.T, c Config) *Service {
 	t.Helper()
 	// Connection integration tests must never change installed ground stations.
 	c.AutoConfigureGCS = false
+	c.BridgeAddress = "127.0.0.1:0"
 	s := &Service{config: c, path: filepath.Join(t.TempDir(), "product.json"), vehicles: map[byte]Vehicle{}}
 	s.resetLinks()
 	s.state.Events = []Activity{}
-	t.Cleanup(s.Stop)
+	t.Cleanup(s.Close)
 	return s
 }
 func waitFor(t *testing.T, condition func() bool) {
@@ -108,7 +109,15 @@ func TestUDPToFlightBlender(t *testing.T) {
 			return
 		}
 		if r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/flight_declaration_ops/flight_declaration") {
-			io.WriteString(w, `{"id":"00000000-0000-0000-0000-000000000001"}`)
+			if r.URL.Query().Get("page_size") == "100" {
+				io.WriteString(w, `{"count":0,"results":[]}`)
+			} else {
+				io.WriteString(w, `{"id":"00000000-0000-0000-0000-000000000001"}`)
+			}
+			return
+		}
+		if r.URL.Path == "/geo_fence_ops/geo_fence" {
+			io.WriteString(w, `{"count":0,"results":[]}`)
 			return
 		}
 		if r.Method != "PUT" || r.URL.Path != "/flight_stream/set_telemetry" {
