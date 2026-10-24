@@ -103,6 +103,10 @@ jobs:
       - uses: ./.github/actions/install-dependencies
         with:
           nsis: ${{ runner.os == 'Windows' && 'true' || 'false' }}
+      # Dependency setup may create a venv containing only CI tools. CMake
+      # reuses it, so install generator dependencies explicitly before configure.
+      - name: Install upstream source generator dependencies
+        run: python3 tools/setup/install_python.py scripts,ci
       - name: Test native restriction map
         env:
           QSG_RHI_BACKEND: software
