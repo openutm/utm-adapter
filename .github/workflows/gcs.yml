@@ -111,7 +111,16 @@ jobs:
       # Dependency setup may create a venv containing only CI tools. CMake
       # reuses it, so install generator dependencies explicitly before configure.
       - name: Install upstream source generator dependencies
-        run: python3 tools/setup/install_python.py scripts,ci
+        run: |
+          python3 tools/setup/install_python.py scripts,ci
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            venv_python=.venv/Scripts/python.exe
+          else
+            venv_python=.venv/bin/python
+          fi
+          "$venv_python" -c 'import defusedxml, httpx, jinja2, ninja'
+          "$venv_python" -m pip --version
+          ninja --version
       - name: Test native restriction map
         env:
           QSG_RHI_BACKEND: software
@@ -119,6 +128,9 @@ jobs:
           qmllint adapter/integrations/qgroundcontrol/AdapterRestrictions.qml
           qmltestrunner -platform offscreen -input adapter/integrations/qgroundcontrol/tests
       - uses: ./.github/actions/cmake-configure
+        # The pinned upstream's automatic check ignores Python version markers,
+        # then syncs only scripts and removes Ninja. We install and check both
+        # dependency groups above, so keep that environment intact in CMake.
         with:
           build-dir: ${{ runner.temp }}/build
           stable: 'true'
@@ -126,6 +138,7 @@ jobs:
             -DQGC_CUSTOM_DIR=custom-openutm-adapter
             -DQGC_BUILD_TESTING=OFF
             -DQGC_MACOS_SIGN_WITH_IDENTITY=OFF
+            -DQGC_AUTO_PYTHON_VENV=OFF
       - uses: ./.github/actions/cmake-build
         with:
           build-dir: ${{ runner.temp }}/build
