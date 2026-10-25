@@ -44,11 +44,15 @@ type archiveBatch struct {
 func (r *Records) archive(b SessionBatch) (archiveBatch, error) {
 	s, a := b.Session, b.Session.Assignment
 	result := archiveBatch{
-		Session: archiveSession{SchemaVersion: 2, ID: s.ID, Source: "mavlink", Assignment: archiveAssignment{a.DeclarationID, a.VehicleID, a.OperatorID, a.Pilot}, StartedAt: s.StartedAt, EndedAt: s.EndedAt, Revision: s.Revision,
+		Session: archiveSession{SchemaVersion: 2, ID: s.ID, Source: "mavlink", Assignment: archiveAssignment{a.DeclarationID, a.VehicleID, a.OperatorID, a.Pilot}, StartedAt: s.StartedAt.UTC().Truncate(time.Microsecond), Revision: s.Revision,
 			SourceData: map[string]any{"systemID": a.SystemID, "aerobridgeOperationID": a.AerobridgeOperationID, "blenderURL": s.BlenderURL, "aerobridgeURL": s.AerobridgeURL}},
 		Samples: []archiveSample{},
 	}
+	// Python datetime stores microseconds. Canonical transport timestamps must
+	// round-trip across platforms; original nanoseconds remain in sourceData.
 	if s.EndedAt != nil {
+		endedAt := s.EndedAt.UTC().Truncate(time.Microsecond)
+		result.Session.EndedAt = &endedAt
 		var count int64
 		if err := r.db.QueryRow("SELECT COUNT(*) FROM samples WHERE session_id=?", s.ID).Scan(&count); err != nil {
 			return result, err
@@ -60,7 +64,7 @@ func (r *Records) archive(b SessionBatch) (archiveBatch, error) {
 		if v.Latitude == nil || v.Longitude == nil {
 			return result, fmt.Errorf("archive sample requires a position")
 		}
-		result.Samples = append(result.Samples, archiveSample{Sequence: sample.Sequence - 1, RecordedAt: v.GPSAt,
+		result.Samples = append(result.Samples, archiveSample{Sequence: sample.Sequence - 1, RecordedAt: v.GPSAt.UTC().Truncate(time.Microsecond),
 			Position: map[string]any{"latitude": v.Latitude, "longitude": v.Longitude, "altitudeWGS84": v.AltitudeWGS84, "relativeAltitude": v.RelativeAltitude, "speed": v.Speed, "heading": v.Heading, "motorsOn": v.Armed, "satellites": v.Satellites}, SourceData: v})
 	}
 	return result, nil

@@ -86,3 +86,31 @@ func TestSharedArchiveAcrossBatchesAndRestart(t *testing.T) {
 		t.Fatalf("archive remains pending: %+v %v", pending, err)
 	}
 }
+
+func TestSharedArchiveTimestampPrecision(t *testing.T) {
+	r, err := openRecords(filepath.Join(t.TempDir(), "records.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.db.Close()
+	s, err := r.begin(assignment(1), DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 10, 25, 12, 0, 0, 123456789, time.FixedZone("offset", 7200))
+	ended := at.Add(time.Second)
+	s.StartedAt, s.EndedAt = at.Add(-time.Second), &ended
+	v := Vehicle{GPSAt: at, Latitude: f64(47), Longitude: f64(19)}
+	wire, err := r.archive(SessionBatch{Session: s, Samples: []Sample{{Sequence: 1, Vehicle: v}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stamp := range []time.Time{wire.Session.StartedAt, *wire.Session.EndedAt, wire.Samples[0].RecordedAt} {
+		if stamp.Nanosecond()%1000 != 0 || stamp.Location() != time.UTC {
+			t.Fatalf("noncanonical timestamp: %v", stamp)
+		}
+	}
+	if !wire.Samples[0].RecordedAt.Equal(at.Truncate(time.Microsecond)) || wire.Samples[0].SourceData.GPSAt != at {
+		t.Fatal("transport precision or original source evidence changed")
+	}
+}
