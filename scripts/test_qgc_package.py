@@ -14,6 +14,39 @@ import threading
 import time
 
 
+
+def stop_process_tree(process):
+    """Stop wrappers and their children before deleting the app's profile."""
+    if os.name == 'nt':
+        # Terminating only QGC's launcher can leave the installed app running.
+        subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        # xvfb-run can exit before its AppImage children. Kill the entire group
+        # even when the original Popen process has already finished.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    process.wait(timeout=5)
+    if os.name != 'nt':
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                os.killpg(process.pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.05)
+
+
 def verify(source, binary, architectures='', build_directory=''):
     requested = threading.Event()
     document = json.dumps({'type': 'FeatureCollection', 'stale': False, 'features': [
@@ -70,16 +103,7 @@ def verify(source, binary, architectures='', build_directory=''):
                         if not requested.is_set():
                             raise RuntimeError('Packaged QGC did not request the custom restriction endpoint')
                     finally:
-                        if process.poll() is None:
-                            if os.name == 'nt':
-                                process.terminate()
-                            else:
-                                os.killpg(process.pid, signal.SIGTERM)
-                        try:
-                            process.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            process.kill()
-                            process.wait()
+                        stop_process_tree(process)
                         log.seek(0)
                         print(log.read().decode('utf-8', errors='replace'))
         finally:
