@@ -24,7 +24,7 @@ func TestFlightSessionIntegration(t *testing.T) {
 	var offline atomic.Bool
 	offline.Store(true)
 	var mu sync.Mutex
-	archived := map[string]SessionBatch{}
+	archived := map[string]archiveBatch{}
 	logs := []map[string]any{}
 	posts := 0
 	fb := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +48,7 @@ func TestFlightSessionIntegration(t *testing.T) {
 		case r.URL.Path == "/geo_fence_ops/geo_fence":
 			io.WriteString(w, `{"count":1,"results":[{"id":"fence","name":"Airport","raw_geo_fence":{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"upperLimit":120},"geometry":{"type":"Polygon","coordinates":[[[19,47],[20,47],[20,48],[19,47]]]}}]}}]}`)
 		case r.Method == "PUT" && strings.HasPrefix(r.URL.Path, "/adapter_ops/sessions/"):
-			var b SessionBatch
+			var b archiveBatch
 			if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 				t.Error(err)
 				w.WriteHeader(400)
@@ -57,7 +57,14 @@ func TestFlightSessionIntegration(t *testing.T) {
 			mu.Lock()
 			archived[b.Session.ID] = b
 			mu.Unlock()
-			io.WriteString(w, `{}`)
+			count := int64(len(b.Samples))
+			complete := b.Session.FinalSampleCount != nil && *b.Session.FinalSampleCount == count
+			fmt.Fprintf(w, `{"id":%q,"revision":%d,"archive":{"complete":%t,"receivedSampleCount":%d,"finalSampleCount":%s}}`, b.Session.ID, b.Session.Revision, complete, count, func() string {
+				if b.Session.FinalSampleCount == nil {
+					return "null"
+				}
+				return fmt.Sprint(*b.Session.FinalSampleCount)
+			}())
 		default:
 			http.NotFound(w, r)
 		}
@@ -343,7 +350,7 @@ func TestFlightBlenderWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var remote SessionBatch
+	var remote archiveBatch
 	if err = json.Unmarshal(raw, &remote); err != nil {
 		t.Fatal(err)
 	}
@@ -359,11 +366,21 @@ func TestFlightBlenderWorkflow(t *testing.T) {
 	if err = json.Unmarshal(raw, &report); err != nil {
 		t.Fatal(err)
 	}
-	if len(remote.Samples) != 1 || remote.Session.EndedAt == nil || remote.Session.Assignment.Pilot != session.Assignment.Pilot || remote.Samples[0].Vehicle.Speed == nil || *remote.Samples[0].Vehicle.Speed != 2.1 {
+	if len(remote.Samples) != 1 || remote.Session.EndedAt == nil || remote.Session.Assignment.Pilot != session.Assignment.Pilot || remote.Samples[0].SourceData.Speed == nil || *remote.Samples[0].SourceData.Speed != 2.1 {
 		t.Fatalf("actual server lost session data: %+v", remote)
 	}
 	remoteJSON, _ := json.Marshal(remote)
-	reportJSON, _ := json.Marshal(report)
+	expectedArchive, err := s.records.archive(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Compare the common metadata and original source evidence; the server also fills optional normalized fields.
+	for i := range remote.Samples {
+		remote.Samples[i].Position = expectedArchive.Samples[i].Position
+	}
+	remote.Archive = nil
+	remoteJSON, _ = json.Marshal(remote)
+	reportJSON, _ := json.Marshal(expectedArchive)
 	if !bytes.Equal(remoteJSON, reportJSON) {
 		t.Fatalf("server and exported record differ:\n%s\n%s", remoteJSON, reportJSON)
 	}

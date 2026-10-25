@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,26 +47,27 @@ type Activity struct {
 	Message string    `json:"message"`
 }
 type Snapshot struct {
-	Version      string          `json:"version"`
-	Aerobridge   Link            `json:"aerobridge"`
-	Records      Link            `json:"records"`
-	Restrictions Link            `json:"restrictions"`
-	Sessions     []RecordSummary `json:"sessions"`
-	BridgeURL    string          `json:"bridgeURL"`
-	Config       Config          `json:"config"`
-	ConfigPath   string          `json:"configPath"`
-	Running      bool            `json:"running"`
-	Blender      Link            `json:"blender"`
-	Access       Link            `json:"access"`
-	Telemetry    Link            `json:"telemetry"`
-	Delivery     Link            `json:"delivery"`
-	Vehicles     []Vehicle       `json:"vehicles"`
-	GCS          []GCS           `json:"gcs"`
-	Events       []Activity      `json:"events"`
-	Frames       uint64          `json:"frames"`
-	ParseErrors  uint64          `json:"parseErrors"`
-	Sent         uint64          `json:"sent"`
-	Now          time.Time       `json:"now"`
+	Version        string          `json:"version"`
+	Aerobridge     Link            `json:"aerobridge"`
+	Records        Link            `json:"records"`
+	Restrictions   Link            `json:"restrictions"`
+	Sessions       []RecordSummary `json:"sessions"`
+	BridgeURL      string          `json:"bridgeURL"`
+	Config         Config          `json:"config"`
+	ConfigPath     string          `json:"configPath"`
+	Running        bool            `json:"running"`
+	Blender        Link            `json:"blender"`
+	Access         Link            `json:"access"`
+	Telemetry      Link            `json:"telemetry"`
+	Delivery       Link            `json:"delivery"`
+	Vehicles       []Vehicle       `json:"vehicles"`
+	GCS            []GCS           `json:"gcs"`
+	Events         []Activity      `json:"events"`
+	Frames         uint64          `json:"frames"`
+	ParseErrors    uint64          `json:"parseErrors"`
+	LastParseError string          `json:"lastParseError"`
+	Sent           uint64          `json:"sent"`
+	Now            time.Time       `json:"now"`
 }
 type Service struct {
 	syncMu      sync.Mutex
@@ -291,6 +293,7 @@ func (s *Service) start() error {
 	s.vehicles = map[byte]Vehicle{}
 	s.state.Frames = 0
 	s.state.ParseErrors = 0
+	s.state.LastParseError = ""
 	s.state.Sent = 0
 	s.state.Telemetry = Link{State: "waiting", Detail: "Listening for MAVLink"}
 	s.event("Adapter started — " + c.Transport + " " + c.Address)
@@ -311,6 +314,15 @@ func (s *Service) consume(ev gomavlib.Event) {
 	switch e := ev.(type) {
 	case *gomavlib.EventParseError:
 		s.state.ParseErrors++
+		detail := e.Error.Error()
+		switch {
+		case strings.HasPrefix(detail, "invalid magic byte:"):
+			s.state.LastParseError = "Data does not start with a MAVLink header. Check for console output or a mismatched protocol. (" + detail + ")"
+		case strings.HasPrefix(detail, "skipped "):
+			s.state.LastParseError = "Unread UDP data was discarded. Check for console text or multiple frames in one datagram. (" + detail + ")"
+		default:
+			s.state.LastParseError = "MAVLink frame rejected: " + detail
+		}
 	case *gomavlib.EventChannelClose:
 		s.event("MAVLink channel closed; waiting for reconnection")
 	case *gomavlib.EventFrame:

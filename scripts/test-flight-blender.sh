@@ -19,7 +19,20 @@ import uvicorn
 from flight_blender.api.main import create_fastapi_app
 from flight_blender.db.session import Base, engine
 from flight_blender import models
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+@compiles(PGUUID, "sqlite")
+def sqlite_uuid(type_, compiler, **kw):
+    return "CHAR(32)"
 Base.metadata.create_all(engine)
+from datetime import datetime, timezone
+from uuid import UUID
+from sqlalchemy.orm import Session
+from flight_blender.models.flight_declarations_orm import FlightDeclarationORM
+with Session(engine) as db:
+    db.add(FlightDeclarationORM(id=UUID("00000000-0000-0000-0000-000000000001"), aircraft_id="test", operational_intent="{}", bounds="0,0,1,1", state=5,
+        start_datetime=datetime(2020,1,1,tzinfo=timezone.utc), end_datetime=datetime(2020,1,2,tzinfo=timezone.utc)))
+    db.commit()
 sock = socket.socket()
 sock.bind(('127.0.0.1', 0))
 sock.listen(128)
@@ -38,3 +51,7 @@ for attempt in {1..100}; do
 done
 cd "$adapter_root"
 if ! go test -race ./internal/adapter -run '^TestFlightBlender(SessionContract|Workflow)$' -count=1 -v; then cat "$test_dir/server.log"; exit 1; fi
+# Optional second client: exercise the Android JVM core against this same API/database.
+if [[ -n "${DJI_ANDROID_ROOT:-}" ]]; then
+ (cd "$DJI_ANDROID_ROOT" && ./gradlew :core:test --tests '*ArchiveContractIntegrationTest' --rerun-tasks --console=plain) || { cat "$test_dir/server.log"; exit 1; }
+fi

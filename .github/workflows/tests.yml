@@ -10,6 +10,10 @@ on:
         description: 'Optional Flight Blender branch/ref containing the companion adapter API'
         type: string
         default: ''
+      dji-android-ref:
+        description: 'Optional DJI Android branch/ref containing the shared archive client (requires Flight Blender ref)'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -94,13 +98,28 @@ jobs:
           repository: openutm/flight-blender
           ref: ${{ inputs.flight-blender-ref }}
           path: flight-blender
+      - uses: actions/checkout@v4
+        if: inputs.dji-android-ref != ''
+        with:
+          repository: openutm-labs/dji-android-gcs
+          ref: ${{ inputs.dji-android-ref }}
+          path: dji-android-gcs
+      - uses: actions/setup-java@v4
+        if: inputs.dji-android-ref != ''
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        if: inputs.dji-android-ref != ''
       - uses: actions/setup-go@v5
         with:
           go-version-file: adapter/go.mod
       - uses: astral-sh/setup-uv@v6
       - name: Install server dependencies and test actual application
+        env:
+          DJI_ANDROID_ROOT: ${{ inputs.dji-android-ref != '' && format('{0}/dji-android-gcs', github.workspace) || '' }}
         run: |
           cd flight-blender
           uv sync --locked
           cd ../adapter
-          scripts/test-flight-blender.sh
+          env -u ANDROID_HOME -u ANDROID_SDK_ROOT scripts/test-flight-blender.sh

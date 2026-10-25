@@ -82,7 +82,7 @@
       <section class="cards" aria-label="Connection status">
         <article class="card"><div class="card-top"><span class="card-icon">⌘</span><span class:good={detected.some(g => g.running)} class="badge">{detected.some(g => g.running) ? 'Running' : detected.length ? 'Found' : 'Searching'}</span></div><h2>Ground station</h2><strong>{snapshot.config.source === 'direct' ? 'Direct MAVLink' : detected.length ? detected.map(g => g.name).join(' · ') : 'Automatic discovery'}</strong><p>{snapshot.config.source === 'direct' ? 'Listening to your configured vehicle endpoint.' : detected.length ? detected.map(g => g.setupDetail || 'Checking forwarding settings…').join(' · ') : 'Open QGroundControl or Mission Planner, or choose direct MAVLink.'}</p></article>
         <article class="card"><div class="card-top"><span class="card-icon">◎</span><span class:good={healthy(snapshot.access)} class="badge">{label(snapshot.access)}</span></div><h2>Flight Blender</h2><strong>{healthy(snapshot.blender) ? 'Server reachable' : 'Awaiting connection'}</strong><p>{healthy(snapshot.blender) ? snapshot.access.detail : snapshot.blender.detail}</p><span class="mono endpoint">{snapshot.config.baseURL}</span></article>
-        <article class="card"><div class="card-top"><span class="card-icon">↝</span><span class:good={healthy(snapshot.telemetry)} class="badge">{label(snapshot.telemetry)}</span></div><h2>Telemetry stream</h2><strong>{live.length ? `${live.length} vehicle${live.length === 1 ? '' : 's'} connected` : 'No live vehicle yet'}</strong><p>{snapshot.telemetry.detail}</p><span class="mono endpoint">{snapshot.frames.toLocaleString()} frames · {snapshot.parseErrors} parse errors</span></article>
+        <article class="card"><div class="card-top"><span class="card-icon">↝</span><span class:good={healthy(snapshot.telemetry)} class="badge">{label(snapshot.telemetry)}</span></div><h2>Telemetry stream</h2><strong>{live.length ? `${live.length} vehicle${live.length === 1 ? '' : 's'} connected` : 'No live vehicle yet'}</strong><p>{snapshot.telemetry.detail}</p><span class="mono endpoint">{snapshot.frames.toLocaleString()} frames · {snapshot.parseErrors} parse errors</span>{#if snapshot.lastParseError}<p>Last parse error: {snapshot.lastParseError}</p>{/if}</article>
       </section>
 
       {#if !healthy(snapshot.telemetry) && snapshot.running}
@@ -146,8 +146,8 @@
         {#if planner?.settingsPath}<details class="activity"><summary>Installation details</summary><p class="help config-path">Plugin: {planner.settingsPath}</p>{#if planner.backupPath}<p class="help config-path">Backup: {planner.backupPath}</p>{/if}<p class="help">“File installed” confirms the plugin is on disk. Incoming telemetry confirms that forwarding is working.</p></details>{/if}
       </section>
       <section class="panel settings"><div class="panel-heading"><div><h2>OpenUTM QGroundControl</h2><p>Optional custom application</p></div><span class="badge">Source integration</span></div>
-        <p>The included QGC custom layer draws restriction boundaries from the local adapter feed. Build it with the preparation script described in DEVELOPING.md.</p>
-        <p class="help">The integration source ships with releases. A compiled custom QGC is not included. Existing QGroundControl works through automatic forwarding.</p>
+        <p>The OpenUTM QGC build draws restriction boundaries from the local adapter feed. Download it from the release's GCS packages, or build it using DEVELOPING.md.</p>
+        <p class="help">Existing QGroundControl supports telemetry through automatic forwarding. Install the OpenUTM build to add native map overlays.</p>
       </section>
     {:else}
       <section class="intro"><div><div class="eyebrow">CONNECTION SETTINGS</div><h1>Set up once. Stay connected.</h1><p>Your adapter keeps working when you close this window.</p></div></section>

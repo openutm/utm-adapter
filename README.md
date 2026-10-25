@@ -6,6 +6,21 @@ The adapter runs on your computer and keeps working in the system tray when you 
 
 **Version 0.2.0:** records pilot-assigned flight sessions locally, synchronizes their telemetry and audit records, and supplies restrictions to native GCS map integrations. Planning and declaration creation remain in Flight Spotlight / Flight Blender. See the [compatibility matrix](COMPATIBILITY.md) for tested versions and validation boundaries.
 
+## Documentation
+
+| Guide | Use it for |
+| --- | --- |
+| This page | Installation, first connection, and everyday controls. |
+| [Configuration reference](docs/CONFIGURATION.md) | Every option, default, identifier, credential and environment setting. |
+| [Operations and recovery](docs/OPERATIONS.md) | Workflow choices, pre/post-flight checks, offline behavior, maps, backups and troubleshooting. |
+| [Developer guide](DEVELOPING.md) | Builds, tests, integration verification and release CI. |
+| [Architecture](docs/ARCHITECTURE.md) | Component/sequence/data diagrams, concurrency, persistence, APIs and extension rules. |
+| [Compatibility and validation](COMPATIBILITY.md) | Supported package targets, tested paths and remaining runtime trials. |
+
+## Choose what to enable
+
+Monitoring, local session recording, live delivery and archive synchronization are separate workflows. Both live-delivery switches default to off. Starting a session records received GPS samples and queues its archive for automatic synchronization while connections run, even if live delivery is off. Legacy delivery sends one aircraft's fresh positions without creating a durable session archive. See the [workflow comparison](docs/OPERATIONS.md#choose-a-workflow) before enabling delivery.
+
 ## Get the app
 
 Download tagged builds from [GitHub Releases](https://github.com/openutm/utm-adapter/releases), or a preview build from a successful run of the [Desktop binaries workflow](https://github.com/openutm/utm-adapter/actions/workflows/desktop.yml). Open the run, scroll to **Artifacts**, and select the download for your computer. Downloading requires a GitHub account. Each artifact contains an application archive and a SHA-256 checksum file.
@@ -34,14 +49,14 @@ Have the following ready:
 - QGroundControl or Mission Planner connected to your vehicle, or a direct MAVLink source.
 - To send telemetry: an existing Flight Blender declaration UUID, the vehicle serial number, the operator ID, and the vehicle's MAVLink system ID.
 
-You can monitor incoming telemetry with **Enable telemetry delivery** switched off. Delivery is off by default.
+For monitoring only, leave both **Enable telemetry delivery** and **Send session telemetry to Flight Blender** off, and do not start a session. Both switches are off by default.
 
 ## Connect for the first time
 
 1. Open UTM Adapter and select **Connection settings**.
 2. Enter your **Server URL** and choose **Authentication**. For a bearer token, paste the token. For OAuth, enter the **Token URL**, **Client ID**, **Client secret**, and **Scopes** provided by your administrator. The default scopes are `flightblender.read flightblender.write`. Choose **None** only if your server permits unauthenticated requests.
 3. Under **Ground station & telemetry**, choose your **Telemetry source**. For a local ground station, keep **UDP** and the default **Listen address**, `127.0.0.1:14551`.
-4. Leave telemetry delivery off while setting up. Click **Save & connect**.
+4. Leave both live-delivery switches off while setting up. Click **Save & connect**.
 5. Follow the instructions below for [QGroundControl](#qgroundcontrol), [Mission Planner](#mission-planner), or [Direct MAVLink](#direct-mavlink).
 6. Open **Overview**. Confirm that Flight Blender is reachable, API access is verified, and your vehicle appears under **Vehicle telemetry**.
 
@@ -77,7 +92,7 @@ You can use Mission Planner's built-in MAVLink mirror or install the optional Op
 
 The plugin forwards received telemetry automatically when Mission Planner starts and follows changes to all vehicle connections and displays restriction polygons on the Flight Data map. Automatic configuration alone never installs it; you must select the plugin explicitly. The adapter does not request administrator access, so installation can fail if the Mission Planner directory is not writable. Use the built-in mirror in that case.
 
-**File installed** confirms installation on disk. Incoming telemetry confirms forwarding is working. Windows runtime validation of the plugin remains pending in this preview.
+**File installed** confirms installation on disk. Incoming telemetry confirms forwarding is working. Windows CI verifies packaged DLL loading, initialization and unload. Connected-vehicle forwarding and interactive map trials remain pending.
 
 ### Direct MAVLink
 
@@ -103,7 +118,7 @@ Deploy the companion Flight Blender adapter API and run `alembic upgrade head` o
 4. Enable **Send session telemetry** in settings to send fresh positions for each active session. Archive synchronization runs independently and retains failed deliveries for retry.
 5. End the session and select **Export** for a JSON report containing pilot/aircraft details, GPS positions, altitudes, speed, declaration history and start/end audit events. The app displays the export's path.
 
-Sessions and delivery cursors survive restarts. A paused receiver records no new samples. After a crash, the existing session remains active until you end it; receiving telemetry resumes into that assignment. Session records upload in batches of at most 200 samples, with duplicate-safe Flight Blender retries. Historical samples go to the archive API rather than being replayed as live positions. The adapter caches declarations from the configured Flight Blender server, including observed changes to historical declarations.
+Sessions and delivery cursors survive restarts. A paused receiver records no new samples. After a crash, the existing session remains active until you end it; receiving telemetry resumes into that assignment. Session records upload in batches of at most 200 samples, with duplicate-safe Flight Blender retries. Historical samples go to the archive API rather than being replayed as live positions. The adapter caches declarations from the configured Flight Blender server, including observed changes to historical declarations. See [operations and recovery](docs/OPERATIONS.md) for offline behavior, synchronization status, multi-aircraft checks and backups.
 
 For Aerobridge, enable the optional registry in settings and provide its URL and bearer token. **Refresh choices** loads aircraft, pilots and operations. Enter the matching operation UUID when starting a session; the adapter attaches the session batch to that operation's flight log. Disabling Aerobridge keeps its pending records locally. Pending deliveries remain associated with their original server URL and resume when that server is selected again.
 
@@ -143,7 +158,7 @@ Launching the app again opens the existing instance. The app does not configure 
 
 ## Settings, credentials, and undoing setup
 
-Tokens and client secrets are stored in macOS Keychain, Windows Credential Manager, or Linux Secret Service. Leave a password field blank to keep its saved value. **Remove saved credentials** deletes saved credentials, disables telemetry delivery, and pauses connections.
+Tokens and client secrets are stored in macOS Keychain, Windows Credential Manager, or Linux Secret Service. Leave a password field blank to keep its saved value. **Remove saved credentials** deletes all saved secrets, disables legacy telemetry delivery and Aerobridge, and pauses connections. The session-delivery setting remains unchanged; review it before resuming. See the [credential reference](docs/CONFIGURATION.md#credential-presence-fields).
 
 Other settings are saved in `OpenUTM/utm-adapter/product.json` under your OS configuration directory. Typical locations are:
 
@@ -158,7 +173,7 @@ Use the path shown in **Recent activity** to locate your actual file. `records.s
 Automatic setup backs up existing files before changing them, beside the original with the suffix `.utm-adapter-backup-<timestamp>`. It does not rewrite unchanged settings. Turning automatic setup off leaves existing forwarding and installed plugins in place.
 
 - **Undo QGroundControl setup:** disable automatic configuration in the adapter, close QGroundControl, restore its settings backup, and remove the adjacent `.utm-adapter-target` file. Reopen QGroundControl. If no backup is available, disable forwarding manually in QGroundControl.
-- **Remove the Mission Planner plugin:** close Mission Planner and choose **Ground stations → Remove OpenUTM plugin**. This disables future installation and moves the plugin to a backup that Mission Planner will not load.
+- **Remove the Mission Planner plugin:** close Mission Planner and choose **Ground stations → Remove OpenUTM plugin**. This disables future installation and moves the managed source plugin to a backup that Mission Planner will not load. A compiled release DLL must be removed manually; see its [installation guide](integrations/mission-planner/README.md).
 
 ## Troubleshooting
 
@@ -182,8 +197,10 @@ If you need help, [open an issue](https://github.com/openutm/utm-adapter/issues)
 - MAVLink 1 and 2 are supported for monitoring, using autopilot component 1. Delivery requires MAVLink 2 ellipsoid altitude. UDP input expects one MAVLink frame per datagram.
 - Armed state is displayed locally; delivered operational status is **Undeclared**, because armed state alone does not establish whether a vehicle is airborne.
 - No automatic updates, login startup, or publisher signing. QGC packages and the Mission Planner plugin are built alongside adapter releases; see [COMPATIBILITY.md](COMPATIBILITY.md) for platforms and verification coverage.
-- Real autopilots, serial hardware, live Aerobridge and Mission Planner runtime integration still need trials. The real Flight Blender application is covered by a local cross-repository contract test. See [COMPATIBILITY.md](COMPATIBILITY.md).
+- Physical autopilots, serial hardware, production authentication/deployments and interactive Mission Planner vehicle/map use still need trials. Local tests exercise the actual Flight Blender and Aerobridge applications; virtual serial and SITL/parser tests do not establish hardware compatibility. See [COMPATIBILITY.md](COMPATIBILITY.md).
 
 For source builds, development setup, architecture, and testing, see the separate [developer guide](DEVELOPING.md).
 
 Licensed under [Apache 2.0](LICENSE).
+
+See the [shared Go/DJI session archive contract](docs/SESSION_ARCHIVE.md) for schema version 2, completion receipts, compatibility and the cross-client integration harness.

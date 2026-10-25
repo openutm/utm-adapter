@@ -258,7 +258,15 @@ func (s *Service) syncRecords(ctx context.Context, b *Blender, fleet *Aerobridge
 		if r.BlenderPending && r.Session.BlenderURL == strings.TrimRight(c.BaseURL, "/") {
 			batch, e := s.records.batch(r.Session.ID, "blender")
 			if e == nil {
-				_, e = b.request(ctx, "PUT", "/adapter_ops/sessions/"+r.Session.ID, batch, true)
+				var payload archiveBatch
+				payload, e = s.records.archive(batch)
+				if e == nil {
+					var response []byte
+					response, e = b.request(ctx, "PUT", "/adapter_ops/sessions/"+r.Session.ID, payload, true)
+					if e == nil {
+						e = validateArchiveReceipt(response, payload)
+					}
+				}
 			}
 			if e == nil {
 				e = s.records.ack(batch, "blender")

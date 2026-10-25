@@ -1,8 +1,8 @@
 # Developing UTM Adapter
 
-This guide covers building, testing, and changing UTM Adapter. For installation and everyday use, see the [user guide](README.md).
+This guide covers building, testing, and changing UTM Adapter. For installation and everyday use, see the [user guide](README.md). Read the [architecture and integration contracts](docs/ARCHITECTURE.md) for system diagrams, concurrency, SQLite schema, retry semantics, API contracts and extension rules. The [configuration reference](docs/CONFIGURATION.md) documents all settings.
 
-The desktop preview implements the initial MAVLink-to-Flight Blender connection work described in [flight-blender#218](https://github.com/openutm/flight-blender/issues/218). It uses Go, Wails v3, and Svelte 5. A separate Python prototype is outside this repository.
+The desktop implements the session, telemetry and GCS integration work described in [flight-blender#218](https://github.com/openutm/flight-blender/issues/218). It uses Go, Wails v3, and Svelte 5. A separate Python prototype is outside this repository.
 
 ## Prerequisites
 
@@ -55,7 +55,7 @@ The build tasks install locked frontend dependencies, generate TypeScript bindin
 
 macOS packaging ad-hoc signs and verifies the bundle. This is not Developer ID signing or notarization. Platform-specific tasks live under `build/darwin/`, `build/windows/`, and `build/linux/`; the root [Taskfile.yml](Taskfile.yml) dispatches to them. Docker and server-mode task scaffolding also exists, but the supported user workflow documented here is the desktop app.
 
-The Go entry point embeds `frontend/dist`, so a raw `go build` from a fresh checkout is insufficient. Use the Wails build tasks to prepare the frontend first.
+The Go entry point embeds `frontend/dist`, so a raw `go build` from a fresh checkout is insufficient. Use the Wails build tasks to prepare the frontend first. Finish frontend production builds before compiling or testing packages that embed it: Vite replaces the asset directory during its build, so concurrent Go compilation can fail with missing embedded files.
 
 ## Isolate local settings
 
@@ -68,10 +68,10 @@ The Go entry point embeds `frontend/dist`, so a raw `go build` from a fresh chec
 For example, on macOS or Linux:
 
 ```sh
-UTM_ADAPTER_CONFIG="$PWD/product.json" wails3 dev
+UTM_ADAPTER_CONFIG="${TMPDIR:-/tmp}/utm-adapter-dev/product.json" wails3 dev
 ```
 
-The root `product.json` is ignored by Git. Configuration uses an atomic temporary-file replacement and excludes tokens and client secrets. Secrets are stored under credential service `org.openutm.adapter`, keyed by the configuration path. Choosing another path also chooses another credential-store entry.
+The root `product.json` is ignored by Git. The example uses a separate temporary directory because `records.sqlite` and `exports/` belong to the configuration directory; different filenames within one directory share the same database. Temporary directories can be removed by the OS; use a persistent private directory when you need to retain test records. Keep local test data out of commits. Configuration uses an atomic temporary-file replacement and excludes tokens and client secrets. Secrets are stored under credential service `org.openutm.adapter`, keyed by the configuration path. Choosing another path also chooses another credential-store entry.
 
 A second application launch opens the existing instance, even when a different config path is supplied. Quit the first instance before switching configurations. The application starts connections on launch using its saved configuration; for local testing, leave delivery disabled and select **Direct MAVLink** to avoid automatic ground station changes.
 
@@ -95,6 +95,35 @@ go run ./cmd/telemetry-demo --address 127.0.0.1:14550
 ```
 
 Synthetic data can satisfy the delivery guards. Keep delivery off for UI-only tests; use a dedicated test server and declaration when testing publishing.
+
+The telemetry card shows the parse-error count and the latest parser diagnostic.
+An invalid magic byte means the input did not begin with a MAVLink header;
+ArduPilot SITL can produce this when console startup text shares the telemetry
+output. A skipped-byte diagnostic reports unread data from the previous UDP
+datagram, which can contain console text or additional frames. A checksum error
+reports a rejected MAVLink frame. Valid telemetry continues to be processed after
+these errors; reconnecting clears the count and diagnostic. For SITL validation,
+keep its console output separate from the MAVLink feed.
+
+For a built ArduPilot checkout, set `ARDUPILOT_ROOT` to its absolute path and
+start SITL from a scratch directory so its parameter storage stays isolated:
+
+```sh
+mkdir -p /tmp/utm-adapter-sitl
+cd /tmp/utm-adapter-sitl
+"$ARDUPILOT_ROOT/build/sitl/bin/arducopter" --model quad --home 47.5,19.0,120,0 --serial0 tcp:5770 --defaults "$ARDUPILOT_ROOT/Tools/autotest/default_params/copter.parm"
+```
+
+In another terminal, use MAVProxy's dedicated MAVLink output and explicitly
+request telemetry streams. Configure the adapter to listen on UDP port 14551:
+
+```sh
+mavproxy.py --master tcp:127.0.0.1:5770 --out udp:127.0.0.1:14551 --streamrate 5 --mav20 --non-interactive --no-state
+```
+
+Allow time for simulated GPS initialization. MAVProxy parses the console-facing
+connection and forwards MAVLink messages to the adapter. This avoids feeding
+SITL's raw console output directly into its UDP listener.
 
 ## Automated checks
 
@@ -127,11 +156,14 @@ Before changing a native integration, also exercise it on the relevant OS. Compi
 | [internal/adapter/blender.go](internal/adapter/blender.go) | Flight Blender HTTP client, bearer/OAuth authentication, access checks, and telemetry payloads. |
 | [internal/adapter/discovery.go](internal/adapter/discovery.go) | Ground station process detection and known installation/settings locations. |
 | [internal/adapter/gcsconfigure.go](internal/adapter/gcsconfigure.go) | QGC forwarding configuration, backups, and generated Mission Planner C# plugin installation/removal. |
-| [frontend/src/App.svelte](frontend/src/App.svelte) | Overview, ground station options, connection settings, and service calls. |
+| [internal/adapter/records.go](internal/adapter/records.go) | SQLite schema, sample sequences, durable batches, cursors and document history. |
+| [internal/adapter/sessions.go](internal/adapter/sessions.go), [sync.go](internal/adapter/sync.go) | Session lifecycle, export, archive orchestration, declaration cache and Aerobridge integration. |
+| [internal/adapter/restrictions.go](internal/adapter/restrictions.go) | Restriction conversion/cache and loopback GeoJSON bridge. |
+| [frontend/src/App.svelte](frontend/src/App.svelte) | Overview, flight sessions, ground station options, settings, and service calls. |
 | [cmd/telemetry-demo/main.go](cmd/telemetry-demo/main.go) | Synthetic local UDP sender. |
 | `build/` and `.github/workflows/` | Platform build tasks, application assets, CI checks, and binary artifacts. |
 
-The Wails service owns a gomavlib node and a background loop. Incoming frames update vehicle state keyed by MAVLink system ID. The frontend polls `GetSnapshot()` once per second; snapshots contain status and credential-presence flags, never secret values. `ApplyConfig()` validates and saves settings and restarts connections. `Start()` and `Stop()` control connections; `ClearCredentials()` pauses them and disables publishing.
+The Wails service owns a gomavlib node and a background loop. Incoming frames update vehicle state keyed by MAVLink system ID. The frontend polls `GetSnapshot()` once per second; snapshots contain status and credential-presence flags, never secret values. `ApplyConfig()` validates and saves settings and restarts connections. `Start()` and `Stop()` control connections; `ClearCredentials()` pauses them and disables legacy publishing and Aerobridge; it does not clear the session-delivery flag.
 
 Ground station discovery, setup, server health, and API read checks run roughly every ten loop iterations. Publishing is attempted on a one-second ticker. HTTP calls and discovery can delay that cadence, so these are approximate intervals.
 
@@ -181,9 +213,9 @@ Linux CI installs native dependencies through [build/ci/install-linux-deps.sh](b
 
 ## Validation boundaries
 
-The existing preview notes record successful QGroundControl 5.1.4 automatic setup and forwarding on macOS with synthetic MAVLink, direct UDP, TCP integration tests, an HTTP Flight Blender test server, and checks against Flight Blender's telemetry dataclass parser. These are separate from live operational validation.
+Local validation includes actual Flight Blender and Aerobridge application contracts, macOS UI/Keychain/session export, virtual serial, Linux executable startup under emulation, and a clean SITL → MAVProxy → parser GPS stream. See [COMPATIBILITY.md](COMPATIBILITY.md) for scope and remaining gaps. Isolated local services do not establish production authentication or deployment readiness.
 
-Live authenticated Flight Blender delivery, real autopilots, serial hardware, and connected Mission Planner UI integration still need trials. The generated Mission Planner plugin compiles against official 1.3.83 assemblies using C# 5 and .NET Framework reference assemblies; Windows CI also loads, initializes and unloads the packaged DLL. Record the OS, GCS version, transport, and receiving Flight Blender version when extending that coverage.
+Physical autopilots, serial hardware, interactive Windows/GCS operation, native Linux adapter AppImage launch and production identity-provider behavior still need trials. Windows CI compiles, loads, initializes and unloads the packaged Mission Planner DLL; this does not prove connected-aircraft or map interaction. Record the adapter/server commit, OS, GCS version, transport, authentication mode and test procedure when extending coverage.
 
 Declaration creation and planning remain external. Publisher signing, auto-updates and login startup remain outside this release. Session archives, optional Aerobridge registry/log integration, map overlays, compiled custom QGC distribution and installer packaging are implemented in 0.2.0.
 
@@ -201,7 +233,7 @@ Deploy the companion Flight Blender changes and apply `alembic upgrade head`. It
 go test -race ./internal/adapter -run '^TestFlightSessionIntegration$' -count=1 -v
 
 # Real UDP -> actual Flight Blender FastAPI + SQLAlchemy -> exported report, isolated
-# in a temporary directory. Requires the sibling server's Python environment.
+# in a temporary directory. Requires the sibling server's installed Python environment and companion API.
 FLIGHT_BLENDER_ROOT=../flight-blender scripts/test-flight-blender.sh
 
 node scripts/check-version.mjs
@@ -225,7 +257,7 @@ qmltestrunner -platform offscreen -input integrations/qgroundcontrol/tests
 python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
-Changing the bridge address requires updating the QML `endpoint` or regenerating the installed Mission Planner plugin through the adapter. The generated Mission Planner source contains its forwarding and map integration; Windows runtime validation remains required. See [COMPATIBILITY.md](COMPATIBILITY.md) for exact coverage.
+Changing the bridge address requires updating the QML `endpoint` or regenerating the installed Mission Planner plugin through the adapter. The generated Mission Planner source contains its forwarding and map integration; connected-vehicle and interactive Windows map validation remains required. See [COMPATIBILITY.md](COMPATIBILITY.md) for exact coverage.
 
 The Tests workflow accepts an optional `flight-blender-ref` on manual dispatch to run the same real-server contract against a branch containing the companion API. Default checks run the two-aircraft UDP/restart integration test on Linux and Windows, plus native Qt map tests on Linux and generated Mission Planner plugin compilation on Windows.
 
@@ -266,3 +298,43 @@ GCS builds. A matching `v<version>` tag runs both matrices and publishes only
 after every job succeeds. All packages and their provenance manifests have
 SHA-256 checksums. No signing secrets are required; macOS uses ad-hoc signing.
 Update the upstream pins and compatibility matrix together when upgrading a GCS.
+
+## Verification matrix
+
+Run the checks appropriate to the changed boundary. Default `go test` runs skip environment-dependent checks when their prerequisites are absent; a green default suite does not imply those checks ran.
+
+| Boundary | Check | Prerequisites / limits |
+| --- | --- | --- |
+| Core backend | `go test -race ./internal/...` and `go vet ./internal/...` | No live services/hardware. Covers auth failures, conversion guards, GCS preservation and parser recovery. |
+| Durable store | `go test -race ./internal/adapter -run 'TestRecordsRestartAndCursors\|TestDocumentHistoryAndExport' -count=1` | Temporary SQLite; sequences, retry cursors, declaration history and export. |
+| Multi-aircraft integration | `go test -race ./internal/adapter -run '^TestFlightSessionIntegration$' -count=1 -v` | Real UDP, two aircraft, fixture HTTP services, outage/restart, archive/log recovery, bridge and export. |
+| Actual Flight Blender | `FLIGHT_BLENDER_ROOT=../flight-blender scripts/test-flight-blender.sh` | Installed sibling `.venv`, companion API, Go on PATH; optional `FLIGHT_BLENDER_PYTHON` overrides Python. Temporary SQLite/server, loopback port, `curl`; no production endpoint needed. |
+| Frontend types | `npm --prefix frontend ci` then `npm --prefix frontend run check` | Includes Svelte/TypeScript; not interaction coverage. |
+| Version consistency | `node scripts/check-version.mjs` | Keep release/application/frontend versions aligned. |
+| Packaging helpers | `python3 -m unittest discover -s scripts -p 'test_*.py'` | Use a current Python; package-smoke tooling requires modern Python annotations. |
+| QGC native map | `qmllint` and `qmltestrunner` commands above | Qt Location/Positioning, Qt 6.8+; use `QSG_RHI_BACKEND=software` if offscreen graphics need it. |
+| Mission Planner compilation | `TestMissionPlannerPluginCompilation` | Windows CI supplies `UTM_TEST_MP_DIRECTORY`, `UTM_TEST_MP_CSC`, `UTM_TEST_MP_FRAMEWORK`; without them this test skips. |
+| Packaged GCS | GCS workflow | Boots packaged QGC and requires real event-loop feed fetch; Windows loads/init/unloads the packaged plugin DLL. |
+| Desktop/hardware acceptance | Manual target-OS trial | Install, tray, restart, credential store, real telemetry, map interaction and server authentication. Record results separately. |
+
+The real Flight Blender script starts only an isolated local server, uses temporary data, and cleans it up on exit. It intentionally bypasses JWT signature verification in that process. Run the companion server's API tests for RSA verification, scope/owner isolation and Alembic upgrade/downgrade; ORM metadata creation in the adapter script does not exercise migrations. Actual Aerobridge was additionally checked locally with authentication enforcement disabled; fixture tests remain the repeatable default and do not replace production identity-provider validation.
+
+## Maintaining releases and documentation
+
+For a focused GCS build or the full package set:
+
+```sh
+gh workflow run gcs.yml --ref <source-branch> -f component=mission-planner
+gh workflow run desktop.yml --ref <source-branch> -f packages=qgroundcontrol -f gcs-target=windows-amd64
+gh workflow run desktop.yml --ref <source-branch> -f packages=all
+# Optional actual-server contract against companion changes:
+gh workflow run tests.yml --ref <source-branch> -f flight-blender-ref=<companion-branch>
+```
+
+Manual dispatch builds artifacts without publishing. Full manual Desktop runs also assemble and verify the complete release set; focused selections do not run that aggregate release job. GCS artifacts include provenance manifests and checksums. Update [build/gcs-versions.json](build/gcs-versions.json), compatibility notes, integration installation instructions and expected package tests together when changing an upstream pin.
+
+Before tagging, align versions using the version check, verify both matrices and aggregate checksum checks, review runtime gaps in the compatibility matrix, and confirm the companion server migration is available to users. A matching `v<version>` tag triggers the publish path: create a draft, upload verified packages, then publish. A passing manual build does not validate actual publication permissions or the tag-triggered publish condition. Developer ID/notarization and publisher signing are not configured by this workflow.
+
+When changing options, update [CONFIGURATION.md](docs/CONFIGURATION.md) and the user workflow. When changing persistence, concurrency, payloads or retries, update [ARCHITECTURE.md](docs/ARCHITECTURE.md), receiving-service contracts and relevant integration tests. Keep observed validation results distinct from configured CI checks and pending hardware trials.
+
+See the [shared Go/DJI session archive contract](docs/SESSION_ARCHIVE.md) for schema version 2, completion receipts, compatibility and the cross-client integration harness.

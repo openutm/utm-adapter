@@ -130,6 +130,7 @@ export interface Snapshot {
     "events": Activity[] | null;
     "frames": number;
     "parseErrors": number;
+    "lastParseError": string;
     "sent": number;
     "now": string;
 }
