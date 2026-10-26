@@ -57,10 +57,11 @@ func testService(t *testing.T, c Config) *Service {
 	t.Helper()
 	// Connection integration tests must never change installed ground stations.
 	c.AutoConfigureGCS = false
+	c.BridgeAddress = "127.0.0.1:0"
 	s := &Service{config: c, path: filepath.Join(t.TempDir(), "product.json"), vehicles: map[byte]Vehicle{}}
 	s.resetLinks()
 	s.state.Events = []Activity{}
-	t.Cleanup(s.Stop)
+	t.Cleanup(s.Close)
 	return s
 }
 func waitFor(t *testing.T, condition func() bool) {
@@ -73,6 +74,56 @@ func waitFor(t *testing.T, condition func() bool) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("timed out waiting for condition")
+}
+
+func TestUDPParserDiagnostics(t *testing.T) {
+	c := DefaultConfig()
+	c.Address = freeUDP(t)
+	c.BaseURL = "http://127.0.0.1:1"
+	s := testService(t, c)
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := net.Dial("udp", c.Address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	// SITL's console emits these progress markers alongside MAVLink on serial0.
+	conn.Write([]byte("*"))
+	conn.Write(packets(t, 1, heartbeat()))
+	conn.Write(packets(t, 1, gps()))
+	waitFor(t, func() bool {
+		snap := s.GetSnapshot()
+		return len(snap.Vehicles) == 1 && !snap.Vehicles[0].GPSAt.IsZero()
+	})
+	snap := s.GetSnapshot()
+	if snap.ParseErrors != 1 || !strings.Contains(snap.LastParseError, "console output") || !strings.Contains(snap.LastParseError, "invalid magic byte: 2a") {
+		t.Fatalf("missing console diagnostic: %d errors, %q", snap.ParseErrors, snap.LastParseError)
+	}
+	conn.Write([]byte("Init Gyro"))
+	conn.Write(packets(t, 1, heartbeat()))
+	waitFor(t, func() bool { return strings.Contains(s.GetSnapshot().LastParseError, "skipped 8 bytes") })
+	if detail := s.GetSnapshot().LastParseError; !strings.Contains(detail, "console text or multiple frames") {
+		t.Fatalf("missing unread-data diagnostic: %q", detail)
+	}
+	snap = s.GetSnapshot()
+	corrupted := packets(t, 1, gps())
+	corrupted[len(corrupted)-1] ^= 0xff
+	conn.Write(corrupted)
+	waitFor(t, func() bool { return s.GetSnapshot().ParseErrors > snap.ParseErrors })
+	if detail := s.GetSnapshot().LastParseError; !strings.Contains(detail, "wrong checksum") || strings.Contains(detail, "console") {
+		t.Fatalf("checksum failure misclassified: %q", detail)
+	}
+	frames := s.GetSnapshot().Frames
+	conn.Write(packets(t, 1, gps()))
+	waitFor(t, func() bool { return s.GetSnapshot().Frames > frames })
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if snap := s.GetSnapshot(); snap.ParseErrors != 0 || snap.LastParseError != "" {
+		t.Fatalf("restart retained stale parse diagnostics: %+v", snap)
+	}
 }
 func freeUDP(t *testing.T) string {
 	t.Helper()
@@ -108,7 +159,15 @@ func TestUDPToFlightBlender(t *testing.T) {
 			return
 		}
 		if r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/flight_declaration_ops/flight_declaration") {
-			io.WriteString(w, `{"id":"00000000-0000-0000-0000-000000000001"}`)
+			if r.URL.Query().Get("page_size") == "100" {
+				io.WriteString(w, `{"count":0,"results":[]}`)
+			} else {
+				io.WriteString(w, `{"id":"00000000-0000-0000-0000-000000000001"}`)
+			}
+			return
+		}
+		if r.URL.Path == "/geo_fence_ops/geo_fence" {
+			io.WriteString(w, `{"count":0,"results":[]}`)
 			return
 		}
 		if r.Method != "PUT" || r.URL.Path != "/flight_stream/set_telemetry" {

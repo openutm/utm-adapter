@@ -102,7 +102,10 @@ func (b *Blender) request(ctx context.Context, method, path string, payload any,
 		return nil, fmt.Errorf("Flight Blender unreachable; check the URL and server")
 	}
 	defer res.Body.Close()
-	data, e := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	data, e := io.ReadAll(io.LimitReader(res.Body, (8<<20)+1))
+	if len(data) > 8<<20 {
+		return nil, fmt.Errorf("API response exceeds 8 MiB limit")
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -145,13 +148,16 @@ func (b *Blender) CheckAccess(ctx context.Context) error {
 	return nil
 }
 func (b *Blender) Publish(ctx context.Context, v Vehicle) error {
+	return b.publishFor(ctx, v, b.config)
+}
+func (b *Blender) publishFor(ctx context.Context, v Vehicle, c Config) error {
 	if v.AltitudeWGS84 == nil || v.Latitude == nil || v.Longitude == nil || v.Speed == nil || v.Heading == nil {
 		return fmt.Errorf("waiting for a GPS fix with WGS84 altitude, speed and course")
 	}
 	// Armed state alone does not establish whether the vehicle is airborne.
 	status := "Undeclared"
 	state := map[string]any{"timestamp": map[string]any{"value": v.PositionAt.UTC().Format(time.RFC3339Nano)}, "timestamp_accuracy": 0, "position": map[string]any{"lat": *v.Latitude, "lng": *v.Longitude, "alt": *v.AltitudeWGS84, "accuracy_h": "HAUnknown", "accuracy_v": "VAUnknown", "height": nil, "pressure_altitude": -1000, "extrapolated": false}, "speed_accuracy": "SAUnknown", "operational_status": status, "speed": *v.Speed, "track": *v.Heading, "vertical_speed": 63}
-	payload := map[string]any{"observations": []any{map[string]any{"current_states": []any{state}, "flight_details": map[string]any{"id": b.config.DeclarationID, "operator_id": b.config.OperatorID, "operation_description": "UTM Adapter MAVLink telemetry", "uas_id": map[string]any{"serial_number": b.config.VehicleID}}}}}
+	payload := map[string]any{"observations": []any{map[string]any{"current_states": []any{state}, "flight_details": map[string]any{"id": c.DeclarationID, "operator_id": c.OperatorID, "operation_description": "UTM Adapter MAVLink telemetry", "uas_id": map[string]any{"serial_number": c.VehicleID}}}}}
 	_, e := b.request(ctx, "PUT", "/flight_stream/set_telemetry", payload, true)
 	return e
 }

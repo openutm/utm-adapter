@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/Custom/qml">
+        <file alias="QGroundControl/FlyView/FlyViewCustomLayer.qml">src/FlyViewCustomLayer.qml</file>
+        <file alias="QGroundControl/FlyView/AdapterRestrictions.qml">src/AdapterRestrictions.qml</file>
+    </qresource>
+</RCC>

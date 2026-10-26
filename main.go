@@ -48,7 +48,7 @@ func main() {
 	menu.AddSeparator()
 	menu.Add("Quit UTM Adapter").OnClick(func(_ *application.Context) { app.Quit() })
 	tray.SetMenu(menu)
-	app.OnShutdown(service.Stop)
+	app.OnShutdown(service.Close)
 	if err = service.Start(); err != nil {
 		log.Printf("Connection startup: %v", err)
 	}

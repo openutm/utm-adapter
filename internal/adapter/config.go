@@ -10,6 +10,12 @@ import (
 )
 
 type Config struct {
+	SessionDelivery      bool   `json:"sessionDelivery"`
+	AerobridgeEnabled    bool   `json:"aerobridgeEnabled"`
+	AerobridgeURL        string `json:"aerobridgeURL"`
+	AerobridgeToken      string `json:"aerobridgeToken,omitempty"`
+	HasAerobridgeToken   bool   `json:"hasAerobridgeToken"`
+	BridgeAddress        string `json:"bridgeAddress"`
 	BaseURL              string `json:"baseURL"`
 	AuthMode             string `json:"authMode"`
 	Token                string `json:"token,omitempty"`
@@ -34,13 +40,22 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{BaseURL: "http://127.0.0.1:8000", AuthMode: "bearer", Scope: "flightblender.read flightblender.write", Source: "auto", AutoConfigureGCS: true, Transport: "udp", Address: "127.0.0.1:14551", Baud: 57600, OperatorID: "utm-adapter"}
+	return Config{BridgeAddress: "127.0.0.1:14552", AerobridgeURL: "http://127.0.0.1:8080", BaseURL: "http://127.0.0.1:8000", AuthMode: "bearer", Scope: "flightblender.read flightblender.write", Source: "auto", AutoConfigureGCS: true, Transport: "udp", Address: "127.0.0.1:14551", Baud: 57600, OperatorID: "utm-adapter"}
 }
 func validURL(value string) bool {
 	u, e := url.Parse(value)
 	return e == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil && u.RawQuery == "" && u.Fragment == ""
 }
 func (c Config) Validate() error {
+	if c.AerobridgeEnabled && !validURL(c.AerobridgeURL) {
+		return fmt.Errorf("enter a valid Aerobridge HTTP(S) URL")
+	}
+	if c.BridgeAddress != "" {
+		if _, err := localTarget(c.BridgeAddress); err != nil {
+			return fmt.Errorf("GCS bridge: %w", err)
+		}
+	}
+
 	if !validURL(c.BaseURL) {
 		return fmt.Errorf("enter a valid Flight Blender HTTP(S) URL without credentials or query parameters")
 	}
@@ -89,13 +104,16 @@ func LoadConfig(path string) (Config, error) {
 	e = json.Unmarshal(b, &c)
 	c.Token = ""
 	c.ClientSecret = ""
+	c.AerobridgeToken = ""
 	return c, e
 }
 func SaveConfig(path string, c Config) error {
 	c.Token = ""
 	c.ClientSecret = ""
+	c.AerobridgeToken = ""
 	c.HasToken = false
 	c.HasClientSecret = false
+	c.HasAerobridgeToken = false
 	b, e := json.MarshalIndent(c, "", "  ")
 	if e != nil {
 		return e

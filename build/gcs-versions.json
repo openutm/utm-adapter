@@ -1,0 +1,12 @@
+{
+  "qgroundcontrol": {
+    "repository": "mavlink/qgroundcontrol",
+    "version": "5.1.4",
+    "commit": "4568b585648e8c6065cca6c650b52731c1d3baa3"
+  },
+  "missionPlanner": {
+    "version": "1.3.83",
+    "url": "https://github.com/ArduPilot/MissionPlanner/releases/download/MissionPlanner1.3.83/MissionPlanner-1.3.83.zip",
+    "sha256": "ff3694f7a9038caf756545049dd7aef74e3d0d8fe3586e87aa881045704dd6f9"
+  }
+}

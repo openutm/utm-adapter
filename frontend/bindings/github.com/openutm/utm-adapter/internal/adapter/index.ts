@@ -8,9 +8,16 @@ export {
 
 export type {
     Activity,
+    Assignment,
     Config,
+    Document,
+    Fleet,
     GCS,
     Link,
+    Pilot,
+    RecordSummary,
+    RegistryEntity,
+    Session,
     Snapshot,
     Vehicle
 } from "./models.js";

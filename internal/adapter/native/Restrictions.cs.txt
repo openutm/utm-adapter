@@ -1,0 +1,59 @@
+// Read-only map integration; all Flight Blender credentials stay in the adapter.
+internal class AdapterRestrictions {
+ private readonly string endpoint;
+ private readonly GMap.NET.WindowsForms.GMapOverlay overlay = new GMap.NET.WindowsForms.GMapOverlay("openutm-airspace");
+ private readonly System.Windows.Forms.Label status = new System.Windows.Forms.Label();
+ private bool attached;
+ private volatile bool closed;
+ private int ticks;
+ public AdapterRestrictions(string url) { endpoint = url; }
+ private void UI(Action action) {
+  var map = MissionPlanner.GCSViews.FlightData.instance.gMapControl1;
+  if (!map.IsDisposed && map.IsHandleCreated) map.BeginInvoke(new Action(delegate { if (!closed && !map.IsDisposed) action(); }));
+ }
+ public void Refresh() {
+  if (closed || (++ticks != 1 && ticks % 10 != 0)) return;
+  try {
+   var request = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(endpoint + "/v1/restrictions");
+   request.Timeout = 2000; request.ReadWriteTimeout = 2000; request.Proxy = null;
+   Newtonsoft.Json.Linq.JObject document;
+   using (var response = request.GetResponse())
+   using (var reader = new System.IO.StreamReader(response.GetResponseStream())) document = Newtonsoft.Json.Linq.JObject.Parse(reader.ReadToEnd());
+   if ((string)document["type"] != "FeatureCollection") throw new FormatException("Invalid restrictions");
+   var next = new System.Collections.Generic.List<GMap.NET.WindowsForms.GMapPolygon>();
+   bool stale = (bool?)document["stale"] ?? true;
+   foreach (var feature in document["features"]) {
+    var geometry = feature["geometry"];
+    var type = (string)geometry["type"];
+    if (type != "Polygon" && type != "MultiPolygon") throw new FormatException("Unsupported geometry");
+    var areas = type == "Polygon" ? new Newtonsoft.Json.Linq.JArray(geometry["coordinates"].DeepClone()) : geometry["coordinates"];
+    foreach (var area in areas) {
+     var points = new System.Collections.Generic.List<GMap.NET.PointLatLng>();
+     foreach (var coordinate in area[0]) {
+      double lon = (double)coordinate[0], lat = (double)coordinate[1];
+      if (Double.IsNaN(lat) || Double.IsNaN(lon) || Math.Abs(lat)>90 || Math.Abs(lon)>180) throw new FormatException("Invalid coordinates");
+      points.Add(new GMap.NET.PointLatLng(lat,lon));
+     }
+     if (points.Count < 4) throw new FormatException("Invalid polygon");
+     var polygon = new GMap.NET.WindowsForms.GMapPolygon(points, (string)feature["properties"]["name"]);
+     polygon.Stroke = new System.Drawing.Pen(stale ? System.Drawing.Color.Orange : System.Drawing.Color.Red, 2);
+     polygon.Fill = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(45, stale ? System.Drawing.Color.Orange : System.Drawing.Color.Red));
+     next.Add(polygon);
+    }
+   }
+   UI(delegate {
+    var map = MissionPlanner.GCSViews.FlightData.instance.gMapControl1;
+    if (!attached) { map.Overlays.Add(overlay); status.AutoSize=true; status.BackColor=System.Drawing.Color.Black; status.ForeColor=System.Drawing.Color.Orange; status.Location=new System.Drawing.Point(8,8); map.Controls.Add(status); attached=true; }
+    foreach (var polygon in overlay.Polygons) { polygon.Stroke.Dispose(); polygon.Fill.Dispose(); }
+    overlay.Polygons.Clear(); foreach (var polygon in next) overlay.Polygons.Add(polygon);
+    status.Text = "OpenUTM: " + next.Count + " boundaries / " + (stale ? "STALE CACHE" : "current") + " - verify altitude and validity limits";
+    map.Invalidate();
+   });
+  } catch (Exception) { UI(delegate { status.Text="OpenUTM airspace unavailable - cached boundaries retained"; }); }
+ }
+ public void Close() {
+  closed = true;
+  var map = MissionPlanner.GCSViews.FlightData.instance.gMapControl1;
+  if (!map.IsDisposed && map.IsHandleCreated) map.BeginInvoke(new Action(delegate { map.Overlays.Remove(overlay); map.Controls.Remove(status); status.Dispose(); overlay.Dispose(); }));
+ }
+}

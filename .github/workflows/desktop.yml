@@ -2,18 +2,41 @@ name: Desktop binaries
 
 on:
   push:
-    tags: ['**']
+    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      packages:
+        description: Packages to build (manual runs do not publish a release)
+        type: choice
+        default: all
+        options: [all, adapter, gcs, qgroundcontrol, mission-planner]
+      gcs-target:
+        description: QGroundControl platform (manual builds only)
+        type: choice
+        default: all
+        options: [all, linux-amd64, windows-amd64, macos-universal]
 
 permissions:
   contents: read
 
 concurrency:
-  group: desktop-${{ github.ref }}
+  group: desktop-${{ github.ref }}-${{ inputs.packages || 'all' }}-${{ inputs.gcs-target || 'all' }}
   cancel-in-progress: true
 
 jobs:
+  gcs:
+    name: GCS packages
+    if: inputs.packages != 'adapter'
+    uses: ./.github/workflows/gcs.yml
+    with:
+      component: ${{ (inputs.packages == 'qgroundcontrol' || inputs.packages == 'mission-planner') && inputs.packages || 'all' }}
+      target: ${{ inputs.gcs-target || 'all' }}
+    permissions:
+      contents: read
+      actions: read
+
   build:
+    if: inputs.packages == '' || inputs.packages == 'all' || inputs.packages == 'adapter'
     name: ${{ matrix.target }}
     strategy:
       fail-fast: false
@@ -57,6 +80,8 @@ jobs:
         run: bash build/ci/install-linux-deps.sh
       - name: Install pinned Wails CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.34
+      - name: Validate version metadata
+        run: node scripts/check-version.mjs
       - name: Backend tests and vet
         run: |
           go test -race ./internal/...
@@ -80,6 +105,22 @@ jobs:
         run: |
           wails3 build GOARCH=amd64
           tar -czf bin/utm-adapter-linux-amd64.tar.gz -C bin utm-adapter
+      - name: Package Linux AppImage
+        if: runner.os == 'Linux'
+        run: |
+          wails3 task linux:create:appimage
+          image=$(find bin -maxdepth 1 -name '*.AppImage' -print -quit)
+          test -n "$image"
+          mv "$image" bin/utm-adapter-linux-amd64.AppImage
+      - name: Package Windows installer with WebView2 bootstrapper
+        if: runner.os == 'Windows'
+        run: |
+          choco install nsis --yes --no-progress
+          export PATH="/c/Program Files (x86)/NSIS:$PATH"
+          wails3 task windows:create:nsis:installer INSTALL_SCOPE=user
+          installer=$(find bin -maxdepth 1 -name '*-installer.exe' -print -quit)
+          test -n "$installer"
+          mv "$installer" bin/utm-adapter-windows-amd64-installer.exe
       - name: Check Svelte and TypeScript
         run: npm --prefix frontend run check
       - name: Generate download checksum
@@ -87,10 +128,11 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           node --input-type=module <<'JS'
-          import { readFileSync, writeFileSync } from 'node:fs';
+          import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
           import { createHash } from 'node:crypto';
-          const name = `utm-adapter-${process.env.TARGET}.${process.env.TARGET.startsWith('linux') ? 'tar.gz' : 'zip'}`;
-          writeFileSync(`bin/${name}.sha256`, `${createHash('sha256').update(readFileSync(`bin/${name}`)).digest('hex')}  ${name}\n`);
+          for (const name of readdirSync('bin').filter(n => n.startsWith('utm-adapter-') && /\.(zip|tar\.gz|exe|AppImage)$/.test(n))) {
+            writeFileSync(`bin/${name}.sha256`, `${createHash('sha256').update(readFileSync(`bin/${name}`)).digest('hex')}  ${name}\n`);
+          }
           JS
       - uses: actions/upload-artifact@v4
         with:
@@ -98,6 +140,39 @@ jobs:
           path: |
             bin/utm-adapter-${{ matrix.target }}.zip
             bin/utm-adapter-${{ matrix.target }}.tar.gz
-            bin/utm-adapter-${{ matrix.target }}.*.sha256
+            bin/utm-adapter-${{ matrix.target }}.AppImage
+            bin/utm-adapter-${{ matrix.target }}-installer.exe
+            bin/utm-adapter-${{ matrix.target }}*.sha256
           if-no-files-found: error
           retention-days: 30
+
+  release:
+    name: Verify release downloads
+    if: (inputs.packages == '' || inputs.packages == 'all') && (inputs.gcs-target == '' || inputs.gcs-target == 'all')
+    needs: [build, gcs]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: utm-adapter-*
+          merge-multiple: true
+          path: release
+      - name: Verify checksums and assemble integration sources
+        run: |
+          cd release
+          sha256sum --check ./*.sha256
+          cp ../COMPATIBILITY.md release-notes.md
+          tar -czf utm-adapter-gcs-integrations.tar.gz -C .. integrations scripts/prepare-qgc.py build/gcs-versions.json
+          sha256sum utm-adapter-gcs-integrations.tar.gz > utm-adapter-gcs-integrations.tar.gz.sha256
+      - name: Publish verified downloads
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cd release
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "UTM Adapter $RELEASE_TAG" --notes-file release-notes.md ./*.zip ./*.tar.gz ./*.exe ./*.AppImage ./*.dmg ./*.build.json ./*.sha256
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
