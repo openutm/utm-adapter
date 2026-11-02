@@ -157,7 +157,7 @@ func (b *Blender) publishFor(ctx context.Context, v Vehicle, c Config) error {
 	// Armed state alone does not establish whether the vehicle is airborne.
 	status := "Undeclared"
 	state := map[string]any{"timestamp": map[string]any{"value": v.PositionAt.UTC().Format(time.RFC3339Nano)}, "timestamp_accuracy": 0, "position": map[string]any{"lat": *v.Latitude, "lng": *v.Longitude, "alt": *v.AltitudeWGS84, "accuracy_h": "HAUnknown", "accuracy_v": "VAUnknown", "height": nil, "pressure_altitude": -1000, "extrapolated": false}, "speed_accuracy": "SAUnknown", "operational_status": status, "speed": *v.Speed, "track": *v.Heading, "vertical_speed": 63}
-	payload := map[string]any{"observations": []any{map[string]any{"current_states": []any{state}, "flight_details": map[string]any{"id": c.DeclarationID, "operator_id": c.OperatorID, "operation_description": "UTM Adapter MAVLink telemetry", "uas_id": map[string]any{"serial_number": c.VehicleID}}}}}
+	payload := map[string]any{"observations": []any{map[string]any{"current_states": []any{state}, "flight_details": map[string]any{"id": c.DeclarationID, "operator_id": c.OperatorID, "operation_description": "Digital Airspace Connector MAVLink telemetry", "uas_id": map[string]any{"serial_number": c.VehicleID}}}}}
 	_, e := b.request(ctx, "PUT", "/flight_stream/set_telemetry", payload, true)
 	return e
 }

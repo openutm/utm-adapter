@@ -4,7 +4,7 @@
         <key>CFBundlePackageType</key>
             <string>APPL</string>
         <key>CFBundleName</key>
-            <string>UTM Adapter</string>
+            <string>Digital Airspace Connector</string>
         <key>CFBundleExecutable</key>
             <string>utm-adapter</string>
         <key>CFBundleIdentifier</key>

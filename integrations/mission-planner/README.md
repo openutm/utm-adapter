@@ -1,6 +1,6 @@
 # Mission Planner plugin
 
-This package targets Mission Planner 1.3.83 on Windows x64 and UTM Adapter 0.2.0.
+This package targets Mission Planner 1.3.83 on Windows x64 and Digital Airspace Connector 0.2.0.
 Close Mission Planner, extract this archive into its installation directory, then
 restart it. The `plugins/OpenUTMAdapter.dll` forwards telemetry from all connected
 vehicles to UDP `127.0.0.1:14551` and displays restrictions from
@@ -17,7 +17,7 @@ records the exact upstream archive and adapter commit used for compilation.
 
 ## Verify the installation
 
-1. Start UTM Adapter with UDP listen address `127.0.0.1:14551`, local map address
+1. Start Digital Airspace Connector with UDP listen address `127.0.0.1:14551`, local map address
    `127.0.0.1:14552`, and a system filter matching your aircraft (`0` for all).
 2. Start Mission Planner and connect aircraft normally. Check the adapter's
    Overview for incoming frames and vehicle telemetry. The plugin follows all

@@ -11,7 +11,7 @@
     !define INFO_COMPANYNAME "OpenUTM"
 !endif
 !ifndef INFO_PRODUCTNAME
-    !define INFO_PRODUCTNAME "UTM Adapter"
+    !define INFO_PRODUCTNAME "Digital Airspace Connector"
 !endif
 !ifndef INFO_PRODUCTVERSION
     !define INFO_PRODUCTVERSION "0.2.0"

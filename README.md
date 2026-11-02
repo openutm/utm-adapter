@@ -1,8 +1,10 @@
-# UTM Adapter
+# Digital Airspace Connector
 
-UTM Adapter connects your vehicle's MAVLink telemetry to Flight Blender. Use it with QGroundControl, Mission Planner, or a direct vehicle connection to view live telemetry and send position updates for an existing flight declaration.
+Digital Airspace Connector connects your vehicle's MAVLink telemetry to Flight Blender. Use it with QGroundControl, Mission Planner, or a direct vehicle connection to view live telemetry and send position updates for an existing flight declaration.
 
-The adapter runs on your computer and keeps working in the system tray when you close its window. It receives telemetry passively and sends no vehicle commands.
+The technical project is named `utm-adapter`; download filenames, configuration paths, and plugin filenames keep that name for compatibility.
+
+The connector runs on your computer and keeps working in the system tray when you close its window. It receives telemetry passively and sends no vehicle commands.
 
 **Version 0.2.0:** records pilot-assigned flight sessions locally, synchronizes their telemetry and audit records, and supplies restrictions to native GCS map integrations. Planning and declaration creation remain in Flight Spotlight / Flight Blender. See the [compatibility matrix](COMPATIBILITY.md) for tested versions and validation boundaries.
 
@@ -53,7 +55,7 @@ For monitoring only, leave both **Enable telemetry delivery** and **Send session
 
 ## Connect for the first time
 
-1. Open UTM Adapter and select **Connection settings**.
+1. Open Digital Airspace Connector and select **Connection settings**.
 2. Enter your **Server URL** and choose **Authentication**. For a bearer token, paste the token. For OAuth, enter the **Token URL**, **Client ID**, **Client secret**, and **Scopes** provided by your administrator. The default scopes are `flightblender.read flightblender.write`. Choose **None** only if your server permits unauthenticated requests.
 3. Under **Ground station & telemetry**, choose your **Telemetry source**. For a local ground station, keep **UDP** and the default **Listen address**, `127.0.0.1:14551`.
 4. Leave both live-delivery switches off while setting up. Click **Save & connect**.
@@ -69,7 +71,7 @@ Saving settings starts or restarts the connections. A successful API access chec
 Automatic setup is enabled by default and configures forwarding to the adapter on the same computer.
 
 1. Open QGroundControl once so it creates its settings, then close it.
-2. In UTM Adapter, select **QGroundControl forwarding** or **Automatic · discover ground station**, with **Set up ground station forwarding automatically** enabled. Click **Save & connect**.
+2. In Digital Airspace Connector, select **QGroundControl forwarding** or **Automatic · discover ground station**, with **Set up ground station forwarding automatically** enabled. Click **Save & connect**.
 3. Check **Overview** or **Ground stations** for a message that forwarding is configured. Discovery and setup can take several seconds.
 4. Reopen QGroundControl and connect your vehicle normally.
 
@@ -85,7 +87,7 @@ You can use Mission Planner's built-in MAVLink mirror or install the optional Op
 
 **Optional plugin:**
 
-1. In UTM Adapter's **Connection settings**, choose **Mission Planner forwarding** or **Automatic · discover ground station**, and select **UDP**. Click **Save & connect**.
+1. In Digital Airspace Connector's **Connection settings**, choose **Mission Planner forwarding** or **Automatic · discover ground station**, and select **UDP**. Click **Save & connect**.
 2. Close Mission Planner.
 3. In **Ground stations**, choose **Install OpenUTM plugin** and wait for **File installed**.
 4. Reopen Mission Planner and connect your vehicle. Confirm incoming telemetry in **Overview**.
@@ -152,7 +154,7 @@ Expand **Recent activity** for connection and setup messages and the location of
 
 ## Run in the background
 
-Closing the window keeps the adapter running in the system tray. Use the tray menu to reopen it, **Pause connections**, **Resume connections**, or **Quit UTM Adapter**. You can also pause and resume from **Overview**.
+Closing the window keeps the adapter running in the system tray. Use the tray menu to reopen it, **Pause connections**, **Resume connections**, or **Quit Digital Airspace Connector**. You can also pause and resume from **Overview**.
 
 Launching the app again opens the existing instance. The app does not configure automatic startup at login.
 

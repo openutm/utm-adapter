@@ -1,4 +1,4 @@
-# Operating UTM Adapter
+# Operating Digital Airspace Connector
 
 Start with the [installation and connection guide](../README.md). The [configuration reference](CONFIGURATION.md) explains every option. This guide covers choosing a workflow, checking results, and recovering records.
 
