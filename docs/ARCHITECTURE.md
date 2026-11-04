@@ -1,6 +1,6 @@
 # Architecture and integration contracts
 
-Digital Airspace Connector is a single desktop process built with Go, Wails v3 and Svelte 5. It passively receives MAVLink, maintains live vehicle state, records assigned sessions in SQLite, and connects to Flight Blender and optional Aerobridge APIs. Native GCS integrations consume its local restriction feed. Planning, declaration creation, aircraft control, and flight authorization remain external.
+Digital Airspace Connector is a single desktop process built with Go, Wails v3 and Svelte 5. It passively receives MAVLink, maintains live vehicle state, records assigned sessions in SQLite, and connects to Flight Blender and optional Aerobridge APIs. Native GCS integrations consume its local restriction feed. Declaration creation and aircraft control remain external. The optional [Trusted Flight module](TRUSTED_FLIGHT.md) adds an isolated Passport/vehicle/pilot handshake, PRO plan and permission workflows, and MAVFTP artifact exchange.
 
 Read [DEVELOPING.md](../DEVELOPING.md) for build/test commands, [CONFIGURATION.md](CONFIGURATION.md) for settings, and [COMPATIBILITY.md](../COMPATIBILITY.md) for evidence and remaining runtime trials. Diagrams below use Mermaid and describe the implemented desktop workflow.
 

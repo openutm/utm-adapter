@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +21,8 @@ import (
 )
 
 type Vehicle struct {
+	ControllerAt     time.Time `json:"-"`
+	ControllerID     string    `json:"controllerID"`
 	SystemID         byte      `json:"systemID"`
 	LastSeen         time.Time `json:"lastSeen"`
 	HeartbeatAt      time.Time `json:"heartbeatAt"`
@@ -70,20 +73,25 @@ type Snapshot struct {
 	Now            time.Time       `json:"now"`
 }
 type Service struct {
-	syncMu      sync.Mutex
-	sessionSent map[string]time.Time
-	records     *Records
-	bridge      *localBridge
-	op          sync.Mutex
-	mu          sync.Mutex
-	config      Config
-	path        string
-	state       Snapshot
-	vehicles    map[byte]Vehicle
-	node        *gomavlib.Node
-	cancel      context.CancelFunc
-	done        chan struct{}
-	frameDone   chan struct{}
+	trusted         *trustedModule
+	vehicleChannels map[byte]*gomavlib.Channel
+	ftpReplies      chan [251]byte
+	ftpSystem       byte
+	ftpSequence     uint16
+	syncMu          sync.Mutex
+	sessionSent     map[string]time.Time
+	records         *Records
+	bridge          *localBridge
+	op              sync.Mutex
+	mu              sync.Mutex
+	config          Config
+	path            string
+	state           Snapshot
+	vehicles        map[byte]Vehicle
+	node            *gomavlib.Node
+	cancel          context.CancelFunc
+	done            chan struct{}
+	frameDone       chan struct{}
 }
 
 func NewService(path string) (*Service, error) {
@@ -92,6 +100,29 @@ func NewService(path string) (*Service, error) {
 		return nil, e
 	}
 	s := &Service{config: c, path: path, vehicles: map[byte]Vehicle{}}
+	tc, err := loadTrustedConfig(trustedConfigPath(path))
+	configErr := err
+	if err != nil {
+		tc.Enabled = false
+	}
+	s.trusted = &trustedModule{config: tc, jobs: map[string]TrustedJob{}, status: TrustedStatus{Enabled: tc.Enabled}}
+	if raw, err := os.ReadFile(s.trustedJobsPath()); err == nil {
+		if err = json.Unmarshal(raw, &s.trusted.jobs); err != nil {
+			s.trusted.config.Enabled = false
+			configErr = fmt.Errorf("load Aerobridge jobs: %w", err)
+			s.trusted.loadErr = configErr
+		}
+	} else if !os.IsNotExist(err) {
+		s.trusted.config.Enabled = false
+		configErr = err
+		s.trusted.loadErr = err
+	}
+	if s.trusted.jobs == nil {
+		s.trusted.jobs = map[string]TrustedJob{}
+	}
+	if configErr != nil {
+		s.trusted.status = TrustedStatus{Detail: configErr.Error(), Server: linkResult(configErr, "")}
+	}
 	s.state.Events = []Activity{}
 	s.state.GCS = Discover()
 	if raw, e := keyring.Get("org.openutm.adapter", path); e == nil {
@@ -231,9 +262,12 @@ func (s *Service) stop() {
 		s.cancel()
 		s.cancel = nil
 	}
-	if s.node != nil {
-		s.node.Close()
-		s.node = nil
+	s.mu.Lock()
+	node := s.node
+	s.node = nil
+	s.mu.Unlock()
+	if node != nil {
+		node.Close()
 	}
 	if s.done != nil {
 		<-s.done
@@ -284,13 +318,16 @@ func (s *Service) start() error {
 	s.mu.Unlock()
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
+	s.mu.Lock()
 	s.node = node
+	s.mu.Unlock()
 	s.done = make(chan struct{})
 	s.frameDone = make(chan struct{})
 	s.mu.Lock()
 	s.state.Running = true
 	s.sessionSent = map[string]time.Time{}
 	s.vehicles = map[byte]Vehicle{}
+	s.vehicleChannels = map[byte]*gomavlib.Channel{}
 	s.state.Frames = 0
 	s.state.ParseErrors = 0
 	s.state.LastParseError = ""
@@ -324,6 +361,14 @@ func (s *Service) consume(ev gomavlib.Event) {
 			s.state.LastParseError = "MAVLink frame rejected: " + detail
 		}
 	case *gomavlib.EventChannelClose:
+		for id, ch := range s.vehicleChannels {
+			if ch == e.Channel {
+				delete(s.vehicleChannels, id)
+				v := s.vehicles[id]
+				v.HeartbeatAt = time.Time{}
+				s.vehicles[id] = v
+			}
+		}
 		s.event("MAVLink channel closed; waiting for reconnection")
 	case *gomavlib.EventFrame:
 		s.state.Frames++
@@ -337,11 +382,27 @@ func (s *Service) consume(ev gomavlib.Event) {
 		if s.config.SystemID != 0 && int(id) != s.config.SystemID {
 			return
 		}
+		if s.vehicleChannels == nil {
+			s.vehicleChannels = map[byte]*gomavlib.Channel{}
+		}
+		s.vehicleChannels[id] = e.Channel
+		if m, ok := e.Message().(*common.MessageFileTransferProtocol); ok && s.ftpReplies != nil && id == s.ftpSystem && m.TargetSystem == 254 && (m.TargetComponent == 0 || m.TargetComponent == 1) {
+			select {
+			case s.ftpReplies <- m.Payload:
+			default:
+			}
+		}
 		v, exists := s.vehicles[id]
 		v.SystemID = id
 		v.LastSeen = time.Now()
 		v.Frames++
 		switch m := e.Message().(type) {
+		case *common.MessageAutopilotVersion:
+			v.ControllerAt = time.Now()
+			v.ControllerID = ""
+			if m.Uid2 != [18]byte{} {
+				v.ControllerID = strings.ToUpper(hex.EncodeToString(m.Uid2[:]))
+			}
 		case *common.MessageHeartbeat:
 			v.Armed = m.BaseMode&common.MAV_MODE_FLAG_SAFETY_ARMED != 0
 			v.HeartbeatAt = time.Now()
@@ -391,6 +452,9 @@ func (s *Service) consume(ev gomavlib.Event) {
 }
 func (s *Service) run(ctx context.Context, c Config, done chan struct{}) {
 	defer close(done)
+	trustedDone := make(chan struct{})
+	go func() { defer close(trustedDone); s.runTrusted(ctx) }()
+	defer func() { <-trustedDone }()
 	b := NewBlender(c)
 	syncDone := make(chan struct{})
 	go func() {

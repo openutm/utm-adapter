@@ -49,7 +49,7 @@ The map listener runs only while connections run. Release GCS integrations use t
 | Baud rate | `baud` | `57600` | Match the device; minimum accepted value is 1200. |
 | MAVLink system ID | `systemID` | `0` | `0` tracks all aircraft; `1`–`255` filters to one aircraft. Legacy delivery requires a nonzero filter. Sessions require explicit IDs matching this filter, or filter `0`. |
 
-The default UDP listener accepts traffic only from the local computer. Listening on an interface address exposes reception to that network; incoming MAVLink does not have adapter-level sender authentication. Use a trusted telemetry network. Automatic GCS setup accepts only local UDP destinations. TCP and serial sources must already stream telemetry: the adapter sends no heartbeat, stream requests, or vehicle commands.
+The default UDP listener accepts traffic only from the local computer. Listening on an interface address exposes reception to that network; incoming MAVLink does not have adapter-level sender authentication. Use a trusted telemetry network. Automatic GCS setup accepts only local UDP destinations. TCP and serial sources must already stream telemetry: passive telemetry sends no heartbeat or stream requests. The separately enabled [Trusted Flight module](TRUSTED_FLIGHT.md) sends identification and MAVFTP commands after verification.
 
 ### Legacy single-declaration live delivery
 
