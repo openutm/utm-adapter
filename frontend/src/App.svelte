@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import TrustedFlight from './TrustedFlight.svelte';
+  let trustedReady = $state(false);
   import { Service } from '../bindings/github.com/openutm/utm-adapter/internal/adapter';
   import type { Config, Snapshot, Link, Assignment, Fleet } from '../bindings/github.com/openutm/utm-adapter/internal/adapter/models';
 
@@ -69,7 +71,7 @@
     <span class="version">VERSION <b>{snapshot?.version || '0.2.0'}</b></span>
   </header>
   <nav aria-label="Main navigation">
-    <div class="tabs"><button class:active={page === 'status'} onclick={() => page = 'status'}>Overview</button><button class:active={page === 'sessions'} onclick={() => {page = 'sessions'; action(loadChoices);}}>Flight sessions</button><button class:active={page === 'gcs'} onclick={() => page = 'gcs'}>Ground stations</button><button class:active={page === 'settings'} onclick={() => page = 'settings'}>Connection settings</button></div>
+    <div class="tabs"><button class:active={page === 'status'} onclick={() => page = 'status'}>Overview</button><button class:active={page === 'sessions'} onclick={() => {page = 'sessions'; action(loadChoices);}}>Flight sessions</button><button class:active={page === 'gcs'} onclick={() => page = 'gcs'}>Ground stations</button><button disabled={!trustedReady} class:active={page === 'trusted'} onclick={() => page = 'trusted'}>Aerobridge Fleet Management</button><button class:active={page === 'settings'} onclick={() => page = 'settings'}>Connection settings</button></div>
     <span class="background"><i class:running={snapshot?.running}></i>{snapshot?.running ? 'Running in background' : 'Connections paused'}</span>
   </nav>
 
@@ -101,6 +103,8 @@
       </section>
       <section class="delivery"><div><h3>Flight Blender telemetry delivery</h3><p>{(snapshot.config.publish || snapshot.config.sessionDelivery) ? snapshot.delivery.detail : 'Off. Enable sending for an existing declaration in connection settings.'}</p></div><span class="badge" class:good={snapshot.sent > 0}>{snapshot.sent} accepted</span></section>
       <details class="activity"><summary>Recent activity <span>{snapshot.events?.length ?? 0}</span></summary>{#each snapshot.events?.slice(0,8) || [] as event}<div><time>{new Date(event.at).toLocaleTimeString()}</time><span>{event.message}</span></div>{/each}<p class="quiet config-path">Configuration: {snapshot.configPath}</p></details>
+    {:else if page === 'trusted'}
+      <section class="intro"><h1>Aerobridge Fleet Management</h1></section>
     {:else if page === 'sessions'}
       <section class="intro"><div><div class="eyebrow">FLIGHT RECORDS</div><h1>Pilot, aircraft, declaration.</h1><p>Assign each MAVLink system before flying. Records remain on this computer during an outage.</p></div><button class="secondary" disabled={busy} onclick={() => action(() => Service.Synchronize(), 'Synchronization attempt completed; check delivery status below.')}>Synchronize now</button></section>
       <section class="panel settings"><h2>Storage and delivery</h2><button class="secondary" disabled={busy} onclick={() => action(loadChoices, 'Declaration and fleet choices refreshed.')}>Refresh choices</button><p>{snapshot.records.detail}</p><p>Restrictions: {snapshot.restrictions.detail || 'Waiting for refresh'}</p><p>Aerobridge: {snapshot.aerobridge.detail || 'Disabled'}</p><p class="help">GCS map feed: {snapshot.bridgeURL || 'Paused'}/v1/restrictions</p></section>
@@ -175,7 +179,7 @@
           <div class="form-grid"><label>Connection type<select bind:value={form.transport}><option value="udp">UDP · listen for forwarded telemetry</option><option value="tcp">TCP · connect to endpoint</option><option value="serial">Serial · connect to device</option></select></label>{#if form.transport !== 'serial'}<label>{form.transport === 'udp' ? 'Listen address' : 'Remote address'}<input bind:value={form.address} placeholder={form.transport === 'udp' ? '127.0.0.1:14551' : '127.0.0.1:5760'} required /></label>{/if}</div>
           {#if form.transport === 'serial'}<div class="form-grid"><label>Device<input bind:value={form.serialDevice} placeholder="/dev/cu.usbmodem… or COM3" required /></label><label>Baud rate<input type="number" bind:value={form.baud} min="1200" required /></label></div>{/if}
           {#each detected as g}<p class="help"><b>{g.name}:</b> {g.setupDetail || 'Checking forwarding settings…'}{#if g.settingsPath}<br /><span class="config-path">Settings: {g.settingsPath}</span>{/if}{#if g.backupPath}<br /><span class="config-path">Backup: {g.backupPath}</span>{/if}</p>{/each}
-          <p class="help">Automatic setup uses local UDP forwarding. Close the GCS, save these settings, then reopen it once forwarding is ready. Direct mode receives from a vehicle, router or SITL without changing GCS settings. No vehicle commands are sent.</p>
+          <p class="help">Automatic setup uses local UDP forwarding. Close the GCS, save these settings, then reopen it once forwarding is ready. Direct mode receives from a vehicle, router or SITL without changing GCS settings. Trusted Flight sends commands only after its separate handshake.</p>
           <label>MAVLink system ID<input type="number" min="0" max="255" bind:value={form.systemID} required /><small>0 discovers all vehicle systems. Choose a specific system before sending telemetry.</small></label>
         </section>
         <section class="panel settings"><div class="section-title"><span>03</span><div><h2>Send telemetry to Flight Blender</h2><p>Optional · use an existing flight declaration for this first version</p></div></div>
@@ -187,6 +191,7 @@
         <div class="save-bar"><p>Settings save locally as <code>product.json</code>.</p><button class="primary" disabled={busy} type="submit">{busy ? 'Connecting…' : 'Save & connect'} <span>→</span></button></div>
       </form>
     {/if}
+  <TrustedFlight mode={page === 'trusted' ? 'fleet' : page === 'settings' ? 'setup' : page === 'status' ? 'status' : 'hidden'} onstatus={s => trustedReady = s.ready}/>
   </main>
   <footer><span><i class="running"></i>Close this window to keep the connector in your tray.</span><span>OpenUTM · 0.2.0</span></footer>
 </div>

@@ -14,10 +14,15 @@ export type {
     Fleet,
     GCS,
     Link,
+    PassportConfig,
     Pilot,
     RecordSummary,
     RegistryEntity,
     Session,
     Snapshot,
+    TrustedConfig,
+    TrustedCredentials,
+    TrustedJob,
+    TrustedStatus,
     Vehicle
 } from "./models.js";

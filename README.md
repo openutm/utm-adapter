@@ -4,7 +4,7 @@ Digital Airspace Connector connects your vehicle's MAVLink telemetry to Flight B
 
 The technical project is named `utm-adapter`; download filenames, configuration paths, and plugin filenames keep that name for compatibility.
 
-The connector runs on your computer and keeps working in the system tray when you close its window. It receives telemetry passively and sends no vehicle commands.
+The connector runs on your computer and keeps working in the system tray when you close its window. Telemetry reception is passive by default. The optional [Aerobridge Trusted Flight module](docs/TRUSTED_FLIGHT.md) sends identification and file-transfer commands after a separate verification handshake.
 
 **Version 0.2.0:** records pilot-assigned flight sessions locally, synchronizes their telemetry and audit records, and supplies restrictions to native GCS map integrations. Planning and declaration creation remain in Flight Spotlight / Flight Blender. See the [compatibility matrix](COMPATIBILITY.md) for tested versions and validation boundaries.
 
@@ -13,6 +13,7 @@ The connector runs on your computer and keeps working in the system tray when yo
 | Guide | Use it for |
 | --- | --- |
 | This page | Installation, first connection, and everyday controls. |
+| [Trusted Flight](docs/TRUSTED_FLIGHT.md) | Aerobridge PRO setup, plan workflows, firmware contract and outstanding integration requirements. |
 | [Configuration reference](docs/CONFIGURATION.md) | Every option, default, identifier, credential and environment setting. |
 | [Operations and recovery](docs/OPERATIONS.md) | Workflow choices, pre/post-flight checks, offline behavior, maps, backups and troubleshooting. |
 | [Developer guide](DEVELOPING.md) | Builds, tests, integration verification and release CI. |

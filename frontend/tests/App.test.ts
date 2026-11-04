@@ -8,6 +8,8 @@ const api = vi.hoisted(() => ({
   GetSnapshot: vi.fn(), GetDeclarations: vi.fn(), GetFleet: vi.fn(),
   BeginSession: vi.fn(), EndSession: vi.fn(), ExportSession: vi.fn(),
   Synchronize: vi.fn(), ApplyConfig: vi.fn(), Stop: vi.fn(), Start: vi.fn(),
+  GetTrustedStatus: vi.fn(), GetTrustedConfig: vi.fn(), ConnectTrusted: vi.fn(), SelectTrustedPilot: vi.fn(),
+  GetTrustedJobs: vi.fn(), GetTrustedPlans: vi.fn(), GetTrustedOperations: vi.fn(), ApplyTrustedConfig: vi.fn(),
   ClearCredentials: vi.fn(), RemoveMissionPlannerPlugin: vi.fn(),
 }));
 vi.mock('../bindings/github.com/openutm/utm-adapter/internal/adapter', () => ({ Service: api }));
@@ -26,7 +28,7 @@ beforeEach(() => {
     version: '0.2.0', running: true, now, frames: 123, parseErrors: 2,
     lastParseError: 'Checksum mismatch', sent: 0, events: [], sessions: [],
     configPath: '/test/product.json', bridgeURL: 'http://127.0.0.1:14552',
-    config: { baseURL: 'http://blender.test', aerobridgeURL: 'http://fleet.test',
+    config: {token:'',clientSecret:'',aerobridgeToken:'', baseURL: 'http://blender.test', aerobridgeURL: 'http://fleet.test',
       aerobridgeEnabled: true, source: 'auto', transport: 'udp', address: '127.0.0.1:14551',
       authMode: 'bearer', autoConfigureGCS: true, systemID: 0,
       sessionDelivery: false, hasAerobridgeToken: false, bridgeAddress: '127.0.0.1:14552',
@@ -38,10 +40,13 @@ beforeEach(() => {
     aerobridge: link('connected', 'Registry access verified'), records: link('connected', 'Stored locally'),
     restrictions: link('connected', 'Airspace restrictions refreshed'),
     gcs: [{ id: 'test-gcs', name: 'Third GCS', installed: true, running: false, setupDetail: 'Forwarding ready', settingsPath: '', setupState: 'ready', enhancementState: '', enhancementVersion: '', backupPath: '' }],
-    vehicles: [{ systemID: 1, lastSeen: now, gpsAt: now, latitude: 47.5, longitude: 19,
+    vehicles: [{ controllerID: '', systemID: 1, lastSeen: now, gpsAt: now, latitude: 47.5, longitude: 19,
       altitudeMSL: 120, altitudeWGS84: 164, speed: 2.1, fix: 3, satellites: 14,
       heartbeatAt: now, positionAt: now, frames: 123, armed: false, relativeAltitude: 10, heading: 90 }],
   };
+  api.GetTrustedJobs.mockResolvedValue([]);api.GetTrustedPlans.mockResolvedValue([]);api.GetTrustedOperations.mockResolvedValue([]);
+  api.GetTrustedStatus.mockResolvedValue({enabled:false,ready:false,pilots:[]});
+  api.GetTrustedConfig.mockResolvedValue({enabled:false,timeout_seconds:30,flight_passport:{token_url:'/oauth/token/'},credentials:{}});
   api.GetSnapshot.mockImplementation(async () => structuredClone(snapshot));
   api.GetDeclarations.mockResolvedValue([{ id: declaration }]);
   api.GetFleet.mockResolvedValue({ aircraft: [{ id: aircraft }], pilots: [{ id: pilot }], operations: [{ id: operation }] });
@@ -129,3 +134,13 @@ describe('fleet assignment and compliance records', () => {
     expect(api.GetFleet).toHaveBeenCalledOnce();
   });
 });
+
+ describe('Trusted Flight prerequisites',()=>{
+ it('locks Fleet Management until handshake and pilot assignment, then locks again on disconnect',async()=>{
+ await open();const user=userEvent.setup();const tab=screen.getByRole('button',{name:'Aerobridge Fleet Management'});expect((tab as HTMLButtonElement).disabled).toBe(true);
+ api.GetTrustedStatus.mockResolvedValue({enabled:true,ready:true,aircraftID:aircraft,pilotID:pilot,pilots:[],drone:link('connected','Verified'),server:link('connected','Authenticated')});
+ await waitFor(()=>expect((tab as HTMLButtonElement).disabled).toBe(false),{timeout:3000});await user.click(tab);await screen.findByRole('heading',{name:'Aerobridge Fleet Management'});expect(screen.getByRole('button',{name:'Request permission and load vehicle'})).toBeTruthy();
+ api.GetTrustedStatus.mockResolvedValue({enabled:true,ready:false,pilots:[],detail:'Vehicle disconnected'});
+ await screen.findByText('Fleet Management is locked. Complete the handshake in Connection settings.',{},{timeout:3000});expect((tab as HTMLButtonElement).disabled).toBe(true);
+ });
+ });
