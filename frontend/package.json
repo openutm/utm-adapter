@@ -8,18 +8,23 @@
     "build:dev": "vite build --minify false --mode development",
     "build": "vite build --mode production",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@wailsio/runtime": "3.0.0-beta.34"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@testing-library/svelte": "^5.4.2",
+    "@testing-library/user-event": "^14.6.8",
     "@tsconfig/svelte": "^5.0.8",
+    "jsdom": "^30.1.3",
     "svelte": "^5.46.4",
     "svelte-check": "^4.4.8",
     "tslib": "^2.6.2",
     "typescript": "^5.2.2",
-    "vite": "^8.0.5"
+    "vite": "^8.0.5",
+    "vitest": "^5.1.0"
   }
 }

@@ -134,6 +134,7 @@ go test -race ./internal/...
 go vet ./internal/...
 npm --prefix frontend ci
 npm --prefix frontend run check
+npm --prefix frontend test
 ```
 
 For a focused test while changing an integration:
@@ -142,7 +143,7 @@ For a focused test while changing an integration:
 go test ./internal/adapter -run TestUDPToFlightBlender -v
 ```
 
-The backend suite covers UDP-to-HTTP delivery, direct TCP reception, GPS/altitude guards, credential persistence behavior, authentication failures, redirects, QGC settings preservation, local forwarding targets, and Mission Planner plugin opt-in and removal. Frontend checks validate Svelte and TypeScript; they are not UI interaction tests.
+The backend suite covers UDP-to-HTTP delivery, direct TCP reception, GPS/altitude guards, credential persistence behavior, authentication failures, redirects, QGC settings preservation, local forwarding targets, and Mission Planner plugin opt-in and removal. Frontend checks validate Svelte and TypeScript, including test sources. `npm --prefix frontend test` renders the real Svelte component in jsdom with a mocked Wails service boundary and exercises status updates, retries, source selection, fleet choices and session start/end/export. This does not exercise native Wails window/tray integration.
 
 Before changing a native integration, also exercise it on the relevant OS. Compilation and mocked tests do not establish that a ground station or hardware connection works at runtime.
 
@@ -309,6 +310,7 @@ Run the checks appropriate to the changed boundary. Default `go test` runs skip 
 | Durable store | `go test -race ./internal/adapter -run 'TestRecordsRestartAndCursors\|TestDocumentHistoryAndExport' -count=1` | Temporary SQLite; sequences, retry cursors, declaration history and export. |
 | Multi-aircraft integration | `go test -race ./internal/adapter -run '^TestFlightSessionIntegration$' -count=1 -v` | Real UDP, two aircraft, fixture HTTP services, outage/restart, archive/log recovery, bridge and export. |
 | Actual Flight Blender | `FLIGHT_BLENDER_ROOT=../flight-blender scripts/test-flight-blender.sh` | Installed sibling `.venv`, companion API, Go on PATH; optional `FLIGHT_BLENDER_PYTHON` overrides Python. Temporary SQLite/server, loopback port, `curl`; no production endpoint needed. |
+| Frontend interaction | `npm --prefix frontend test` | Real Svelte DOM; mocked Wails calls. Status/freshness/errors, registered GCS, fleet selection, session lifecycle/export. |
 | Frontend types | `npm --prefix frontend ci` then `npm --prefix frontend run check` | Includes Svelte/TypeScript; not interaction coverage. |
 | Version consistency | `node scripts/check-version.mjs` | Keep release/application/frontend versions aligned. |
 | Packaging helpers | `python3 -m unittest discover -s scripts -p 'test_*.py'` | Use a current Python; package-smoke tooling requires modern Python annotations. |
@@ -338,3 +340,5 @@ Before tagging, align versions using the version check, verify both matrices and
 When changing options, update [CONFIGURATION.md](docs/CONFIGURATION.md) and the user workflow. When changing persistence, concurrency, payloads or retries, update [ARCHITECTURE.md](docs/ARCHITECTURE.md), receiving-service contracts and relevant integration tests. Keep observed validation results distinct from configured CI checks and pending hardware trials.
 
 See the [shared Go/DJI session archive contract](docs/SESSION_ARCHIVE.md) for schema version 2, completion receipts, compatibility and the cross-client integration harness.
+
+See [issue #218 acceptance](docs/ISSUE_218_ACCEPTANCE.md) for requirement evidence, remaining scope decisions and the field/release procedure.

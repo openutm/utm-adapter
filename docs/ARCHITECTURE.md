@@ -37,7 +37,7 @@ There is no remote control listener or MAVLink command path. The Wails service s
 | [blender.go](../internal/adapter/blender.go) | Flight Blender transport, bearer/OAuth, access checks and live telemetry mapping. |
 | [sync.go](../internal/adapter/sync.go) | Declaration caching, archive HTTP requests, Aerobridge registry and flight-log reconciliation. |
 | [restrictions.go](../internal/adapter/restrictions.go) | Geofence conversion/cache refresh and local HTTP bridge. |
-| [discovery.go](../internal/adapter/discovery.go), [gcsconfigure.go](../internal/adapter/gcsconfigure.go) | Known GCS discovery, conservative forwarding edits, backups and managed Mission Planner source generation. |
+| [gcs.go](../internal/adapter/gcs.go), [discovery.go](../internal/adapter/discovery.go), [gcsconfigure.go](../internal/adapter/gcsconfigure.go) | Registered GCS discovery and setup dispatch, conservative forwarding edits, backups and managed Mission Planner source generation. |
 | [App.svelte](../frontend/src/App.svelte) | Four screens, forms, session actions, status display; polls snapshots once per second without overlapping polls. |
 | [QGC integration](../integrations/qgroundcontrol), [Mission Planner integration](../integrations/mission-planner) | Native restriction rendering; Mission Planner also forwards all connected vehicle links. |
 | [build](../build), [scripts](../scripts), [workflows](../.github/workflows) | Native packaging, pinned GCS builds, contract tests and release publication. |
@@ -208,6 +208,14 @@ Automatic forwarding edits are conservative: only local UDP, outside direct mode
 
 Custom QGC is built from pinned upstream with a minimal custom layer, preserving the standard application/settings identity. The Mission Planner release DLL is compiled from the same production generator as the installed source, but with default endpoints. Never install source and DLL copies together.
 
+## Adding a ground station
+
+Implement `GCSIntegration` in `internal/adapter` and call `RegisterGCSIntegration` at application startup, typically from `init`. Return a stable lowercase ID (for example `example-gcs`), a discovery result with its display name and settings path, and a configure result with setup status/detail. Registration rejects duplicate and reserved IDs (`auto`, `direct`). The registered ID automatically becomes a valid `product.json` source and an option in Connection settings; no transport or session changes are needed.
+
+`Discover(context.Context)` must honor its cancellation budget and tolerate absent installations. `Configure(Config, GCS)` must be concurrency-safe, preserve unrelated settings and unmanaged forwarding, back up changes (use `replaceGCSFile`), and avoid vehicle commands. The dispatcher skips uninstalled third-party stations, enforces automatic/source opt-outs, requires a loopback UDP target, and waits for a running station to close before invoking third-party setup. Built-ins retain their additional managed-file inspection and optional Mission Planner opt-in behavior. Use the local restrictions bridge for map overlays; credentials remain in the adapter.
+
+These are compiled-in Go integrations, avoiding platform-specific dynamic library loading. `TestThirdGCSIntegration` provides an executable example spanning registration, discovery, setup, UDP parsing, local recording and export. Add equivalent tests for a production integration, including settings preservation and running/manual/source-selection cases.
+
 ## Security, failure boundaries, and extension rules
 
 Secrets use the OS credential store under `org.openutm.adapter`, keyed by configuration path; snapshots expose only presence flags. Config persistence strips secrets. Removing credentials pauses connections and disables legacy/Aerobridge delivery, but leaves the session-delivery flag unchanged. Records and exports include personal and flight data; protect backups and avoid exposing them in diagnostics.
@@ -224,4 +232,4 @@ When changing the implementation, preserve these invariants:
 - GCS setup must preserve unmanaged targets/plugins and never introduce vehicle commands.
 - Export/API/schema changes must be versioned and tested against the real receiving application as well as fixtures.
 
-Verification is layered: focused Go tests for conversion/configuration/authentication, SQLite restart/cursor/export tests, real-UDP multi-aircraft integration with outages, optional actual Flight Blender contract tests, native Qt map tests, packaged GCS boot/fetch tests, and Windows DLL load/init/unload tests. See the [developer test matrix](../DEVELOPING.md#verification-matrix). Hardware and connected GCS trials remain separate from those checks.
+Verification is layered: Svelte DOM interaction tests with a mocked Wails boundary, focused Go tests for conversion/configuration/authentication, SQLite restart/cursor/export tests, real-UDP multi-aircraft integration with outages, optional actual Flight Blender contract tests, native Qt map tests, packaged GCS boot/fetch tests, and Windows DLL load/init/unload tests. See the [developer test matrix](../DEVELOPING.md#verification-matrix). Hardware and connected GCS trials remain separate from those checks.

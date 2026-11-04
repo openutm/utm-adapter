@@ -9,7 +9,7 @@
   let assignment = $state<Assignment>({systemID:1, declarationID:'', vehicleID:'', operatorID:'', pilot:{id:'', name:'', license:'', contact:''}, aerobridgeOperationID:''} as Assignment);
   let fleet = $state<Fleet | null>(null);
   let declarations = $state<string[]>([]);
-  async function loadChoices() { declarations = ((await Service.GetDeclarations()) || []).map(d => d.id); if (snapshot?.config.aerobridgeEnabled) fleet = await Service.GetFleet(); }
+  async function loadChoices() { fleet = null; declarations = ((await Service.GetDeclarations()) || []).map(d => d.id); if (snapshot?.config.aerobridgeEnabled) fleet = await Service.GetFleet(); }
 
   let busy = $state(false);
   let error = $state('');
@@ -83,6 +83,7 @@
         <article class="card"><div class="card-top"><span class="card-icon">⌘</span><span class:good={detected.some(g => g.running)} class="badge">{detected.some(g => g.running) ? 'Running' : detected.length ? 'Found' : 'Searching'}</span></div><h2>Ground station</h2><strong>{snapshot.config.source === 'direct' ? 'Direct MAVLink' : detected.length ? detected.map(g => g.name).join(' · ') : 'Automatic discovery'}</strong><p>{snapshot.config.source === 'direct' ? 'Listening to your configured vehicle endpoint.' : detected.length ? detected.map(g => g.setupDetail || 'Checking forwarding settings…').join(' · ') : 'Open QGroundControl or Mission Planner, or choose direct MAVLink.'}</p></article>
         <article class="card"><div class="card-top"><span class="card-icon">◎</span><span class:good={healthy(snapshot.access)} class="badge">{label(snapshot.access)}</span></div><h2>Flight Blender</h2><strong>{healthy(snapshot.blender) ? 'Server reachable' : 'Awaiting connection'}</strong><p>{healthy(snapshot.blender) ? snapshot.access.detail : snapshot.blender.detail}</p><span class="mono endpoint">{snapshot.config.baseURL}</span></article>
         <article class="card"><div class="card-top"><span class="card-icon">↝</span><span class:good={healthy(snapshot.telemetry)} class="badge">{label(snapshot.telemetry)}</span></div><h2>Telemetry stream</h2><strong>{live.length ? `${live.length} vehicle${live.length === 1 ? '' : 's'} connected` : 'No live vehicle yet'}</strong><p>{snapshot.telemetry.detail}</p><span class="mono endpoint">{snapshot.frames.toLocaleString()} frames · {snapshot.parseErrors} parse errors</span>{#if snapshot.lastParseError}<p>Last parse error: {snapshot.lastParseError}</p>{/if}</article>
+        {#if snapshot.config.aerobridgeEnabled}<article class="card"><div class="card-top"><span class="card-icon">◎</span><span class:good={healthy(snapshot.aerobridge)} class="badge">{label(snapshot.aerobridge)}</span></div><h2>Aerobridge</h2><strong>{healthy(snapshot.aerobridge) ? 'Registry reachable' : 'Awaiting connection'}</strong><p>{snapshot.aerobridge.detail}</p><span class="mono endpoint">{snapshot.config.aerobridgeURL}</span></article>{/if}
       </section>
 
       {#if !healthy(snapshot.telemetry) && snapshot.running}
@@ -167,7 +168,7 @@
           {#if form.aerobridgeEnabled}<label>Aerobridge URL<input required bind:value={form.aerobridgeURL}/></label><label>Aerobridge bearer token<input type="password" autocomplete="off" bind:value={form.aerobridgeToken} placeholder={snapshot.config.hasAerobridgeToken ? 'Saved securely · leave blank to keep' : 'Paste access token'}/></label>{/if}
         </section>
         <section class="panel settings"><div class="section-title"><span>02</span><div><h2>Ground station & telemetry</h2><p>Use your GCS connection, or a direct MAVLink source</p></div></div>
-          <label>Telemetry source<select bind:value={form.source}><option value="auto">Automatic · discover ground station</option><option value="qgroundcontrol">QGroundControl forwarding</option><option value="mission-planner">Mission Planner forwarding</option><option value="direct">Direct MAVLink</option></select></label>
+          <label>Telemetry source<select bind:value={form.source}><option value="auto">Automatic · discover ground station</option>{#each snapshot.gcs as g}<option value={g.id}>{g.name} forwarding</option>{/each}<option value="direct">Direct MAVLink</option></select></label>
           <label class="toggle"><input type="checkbox" bind:checked={form.autoConfigureGCS} /><span><b>Set up ground station forwarding automatically</b><small>Updates QGC forwarding while the GCS is closed. Mission Planner plugin installation is optional in Ground stations.</small></span></label>
           <button class="text-button" type="button" onclick={() => page = 'gcs'}>Ground station enhancements & options →</button>
           <div class="found">{#each snapshot.gcs as g}<span><i class:running={g.running}></i>{g.name} <b>{g.running ? 'running' : g.installed ? 'installed' : 'not found'}</b></span>{/each}</div>
