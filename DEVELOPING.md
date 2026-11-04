@@ -1,6 +1,6 @@
-# Developing UTM Adapter
+# Developing Digital Airspace Connector
 
-This guide covers building, testing, and changing UTM Adapter. For installation and everyday use, see the [user guide](README.md). Read the [architecture and integration contracts](docs/ARCHITECTURE.md) for system diagrams, concurrency, SQLite schema, retry semantics, API contracts and extension rules. The [configuration reference](docs/CONFIGURATION.md) documents all settings.
+This guide covers building, testing, and changing Digital Airspace Connector. For installation and everyday use, see the [user guide](README.md). Read the [architecture and integration contracts](docs/ARCHITECTURE.md) for system diagrams, concurrency, SQLite schema, retry semantics, API contracts and extension rules. The [configuration reference](docs/CONFIGURATION.md) documents all settings.
 
 The desktop implements the session, telemetry and GCS integration work described in [flight-blender#218](https://github.com/openutm/flight-blender/issues/218). It uses Go, Wails v3, and Svelte 5. A separate Python prototype is outside this repository.
 
@@ -36,7 +36,7 @@ Run commands from the repository root unless stated otherwise.
 wails3 dev
 ```
 
-The development configuration in [build/config.yml](build/config.yml) builds the Go application, starts the Vite frontend, and runs the desktop app. Closing its window hides it; use **Quit UTM Adapter** in the tray to exit.
+The development configuration in [build/config.yml](build/config.yml) builds the Go application, starts the Vite frontend, and runs the desktop app. Closing its window hides it; use **Quit Digital Airspace Connector** in the tray to exit.
 
 Build a desktop package on the host platform:
 

@@ -22,20 +22,20 @@ func main() {
 		log.Fatalf("Cannot load configuration: %v", err)
 	}
 	var window *application.WebviewWindow
-	app := application.New(application.Options{Name: "UTM Adapter", Description: "Ground control to Flight Blender", SingleInstance: &application.SingleInstanceOptions{UniqueID: "org.openutm.adapter", OnSecondInstanceLaunch: func(_ application.SecondInstanceData) {
+	app := application.New(application.Options{Name: "Digital Airspace Connector", Description: "Ground control to Flight Blender", SingleInstance: &application.SingleInstanceOptions{UniqueID: "org.openutm.adapter", OnSecondInstanceLaunch: func(_ application.SecondInstanceData) {
 		if window != nil {
 			window.Show()
 			window.Focus()
 		}
 	}}, Services: []application.Service{application.NewService(service)}, Assets: application.AssetOptions{Handler: application.AssetFileServerFS(assets)}, Mac: application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: false}})
-	window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: "UTM Adapter", Hidden: os.Getenv("UTM_ADAPTER_START_HIDDEN") == "1", Width: 920, Height: 780, MinWidth: 740, MinHeight: 620, URL: "/", BackgroundColour: application.NewRGB(247, 249, 248)})
+	window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: "Digital Airspace Connector", Hidden: os.Getenv("UTM_ADAPTER_START_HIDDEN") == "1", Width: 920, Height: 780, MinWidth: 740, MinHeight: 620, URL: "/", BackgroundColour: application.NewRGB(247, 249, 248)})
 	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) { event.Cancel(); window.Hide() })
 	tray := app.SystemTray.New()
 	tray.SetIcon(trayIcon)
 	tray.SetTemplateIcon(trayIcon)
-	tray.SetTooltip("UTM Adapter · Ground control to Flight Blender")
+	tray.SetTooltip("Digital Airspace Connector · Ground control to Flight Blender")
 	menu := app.NewMenu()
-	menu.Add("Open UTM Adapter").OnClick(func(_ *application.Context) { window.Show(); window.Focus() })
+	menu.Add("Open Digital Airspace Connector").OnClick(func(_ *application.Context) { window.Show(); window.Focus() })
 	menu.AddSeparator()
 	menu.Add("Resume connections").OnClick(func(_ *application.Context) {
 		go func() {
@@ -46,7 +46,7 @@ func main() {
 	})
 	menu.Add("Pause connections").OnClick(func(_ *application.Context) { go service.Stop() })
 	menu.AddSeparator()
-	menu.Add("Quit UTM Adapter").OnClick(func(_ *application.Context) { app.Quit() })
+	menu.Add("Quit Digital Airspace Connector").OnClick(func(_ *application.Context) { app.Quit() })
 	tray.SetMenu(menu)
 	app.OnShutdown(service.Close)
 	if err = service.Start(); err != nil {

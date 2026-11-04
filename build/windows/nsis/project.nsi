@@ -21,7 +21,7 @@ Unicode true
 ####
 ## !define INFO_PROJECTNAME    "my-project" # Default "utm-adapter"
 ## !define INFO_COMPANYNAME    "OpenUTM" # Default "OpenUTM"
-## !define INFO_PRODUCTNAME    "My Product Name" # Default "UTM Adapter"
+## !define INFO_PRODUCTNAME    "My Product Name" # Default "Digital Airspace Connector"
 ## !define INFO_PRODUCTVERSION "1.0.0"     # Default "0.2.0"
 ## !define INFO_COPYRIGHT      "(c) Now, OpenUTM" # Default "© 2026, OpenUTM"
 ###
@@ -33,6 +33,11 @@ Unicode true
 ####
 ## Include the wails tools
 ####
+# Keep the existing installation identity when changing the display name.
+!ifndef UNINST_KEY_NAME
+    !define UNINST_KEY_NAME "OpenUTMUTM Adapter"
+!endif
+!define LEGACY_PRODUCTNAME "UTM Adapter"
 !include "wails_tools.nsh"
 
 # The version information for this two must consist of 4 parts
@@ -74,9 +79,9 @@ ManifestDPIAware true
 Name "${INFO_PRODUCTNAME}"
 OutFile "..\..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the installer's file.
 !if "${WAILS_INSTALL_SCOPE}" == "user"
-    InstallDir "$LOCALAPPDATA\Programs\${INFO_PRODUCTNAME}"
+    InstallDir "$LOCALAPPDATA\Programs\${LEGACY_PRODUCTNAME}"
 !else
-    InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
+    InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${LEGACY_PRODUCTNAME}"
 !endif
 ShowInstDetails show # This will always show the installation details.
 
@@ -93,6 +98,9 @@ Section
 
     !insertmacro wails.files
 
+    # Remove old display-name shortcuts when upgrading in place.
+    Delete "$SMPROGRAMS\${LEGACY_PRODUCTNAME}.lnk"
+    Delete "$DESKTOP\${LEGACY_PRODUCTNAME}.lnk"
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 

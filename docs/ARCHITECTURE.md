@@ -1,6 +1,6 @@
 # Architecture and integration contracts
 
-UTM Adapter is a single desktop process built with Go, Wails v3 and Svelte 5. It passively receives MAVLink, maintains live vehicle state, records assigned sessions in SQLite, and connects to Flight Blender and optional Aerobridge APIs. Native GCS integrations consume its local restriction feed. Planning, declaration creation, aircraft control, and flight authorization remain external.
+Digital Airspace Connector is a single desktop process built with Go, Wails v3 and Svelte 5. It passively receives MAVLink, maintains live vehicle state, records assigned sessions in SQLite, and connects to Flight Blender and optional Aerobridge APIs. Native GCS integrations consume its local restriction feed. Planning, declaration creation, aircraft control, and flight authorization remain external.
 
 Read [DEVELOPING.md](../DEVELOPING.md) for build/test commands, [CONFIGURATION.md](CONFIGURATION.md) for settings, and [COMPATIBILITY.md](../COMPATIBILITY.md) for evidence and remaining runtime trials. Diagrams below use Mermaid and describe the implemented desktop workflow.
 
@@ -11,7 +11,7 @@ flowchart LR
     Vehicle["Autopilot / SITL"] -->|MAVLink| GCS["QGC / Mission Planner / router"]
     Vehicle -->|Direct UDP / TCP / serial| Receiver
     GCS -->|Forwarded UDP| Receiver
-    subgraph Desktop["UTM Adapter process"]
+    subgraph Desktop["Digital Airspace Connector process"]
         UI["Svelte UI + Wails bindings"] <-->|"Calls / redacted snapshots"| Service["Go Service"]
         Receiver["gomavlib receiver"] --> Service
         Service <-->|"Sessions / cache / pending batches"| DB[("records.sqlite")]

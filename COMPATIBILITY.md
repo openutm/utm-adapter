@@ -1,4 +1,4 @@
-# UTM Adapter 0.2.0 compatibility
+# Digital Airspace Connector 0.2.0 compatibility
 
 This release implements the adapter workflow in [Flight Blender #218](https://github.com/openutm/flight-blender/issues/218). Planning and declaration creation remain in Flight Spotlight / Flight Blender.
 

@@ -85,7 +85,7 @@ func configureGCS(c Config, found []GCS) []GCS {
 			}
 			changed = !bytes.Equal(previous, data)
 			if len(previous) > 0 && !bytes.HasPrefix(previous, []byte("// OpenUTM adapter managed plugin")) {
-				err = fmt.Errorf("existing plugin is not managed by UTM Adapter; leaving it unchanged")
+				err = fmt.Errorf("existing plugin is not managed by Digital Airspace Connector; leaving it unchanged")
 			}
 		}
 		if err != nil {
@@ -260,7 +260,7 @@ using System.Net.Sockets;
 using MissionPlanner;
 namespace OpenUTM {
  public class AdapterForwarder : MissionPlanner.Plugin.Plugin {
-  public override string Name { get { return "OpenUTM telemetry forwarder"; } }
+  public override string Name { get { return "Digital Airspace Connector"; } }
   public override string Version { get { return "%s"; } }
   public override string Author { get { return "OpenUTM"; } }
   private UdpClient udp;
@@ -328,7 +328,7 @@ func removeMissionPlannerPlugin(g GCS) (string, error) {
 		return "", err
 	}
 	if !bytes.HasPrefix(data, []byte("// OpenUTM adapter managed plugin")) {
-		return "", fmt.Errorf("existing plugin is not managed by UTM Adapter; leaving it unchanged")
+		return "", fmt.Errorf("existing plugin is not managed by Digital Airspace Connector; leaving it unchanged")
 	}
 	info, err := os.Lstat(g.SettingsPath)
 	if err != nil {

@@ -7,6 +7,7 @@
         GenerateCommandLineFile="true"
         AllowPromptForPassword="false">
     </Settings>
+    <!-- Preserve the installation path and package identity across the display-name change. -->
     <Installer
         Path="utm-adapter"
         Arguments=""
@@ -14,7 +15,7 @@
     </Installer>
     <PackageInformation
         PackageName="UTM Adapter"
-        PackageDisplayName="UTM Adapter"
+        PackageDisplayName="Digital Airspace Connector"
         PublisherName="CN=OpenUTM"
         PublisherDisplayName="OpenUTM"
         Version="0.2.0.0"
@@ -27,7 +28,7 @@
             <Application
                 Id="org.openutm.adapter"
                 Description="Ground control to Flight Blender"
-                DisplayName="UTM Adapter"
+                DisplayName="Digital Airspace Connector"
                 ExecutableName="utm-adapter"
                 EntryPoint="Windows.FullTrustApplication">
 
@@ -41,7 +42,7 @@
         </Dependencies>
         <Properties>
             <Framework>false</Framework>
-            <DisplayName>UTM Adapter</DisplayName>
+            <DisplayName>Digital Airspace Connector</DisplayName>
             <PublisherDisplayName>OpenUTM</PublisherDisplayName>
             <Description>Ground control to Flight Blender</Description>
             <Logo>Assets\AppIcon.png</Logo>

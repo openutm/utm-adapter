@@ -1,6 +1,6 @@
 # Shared session archive API
 
-The Go UTM adapter and DJI Android GCS use one vendor-neutral Flight Blender archive API. Its payload version is `session.schemaVersion: 2`. This is an OpenUTM application contract, not a new ASTM standard. Live traffic continues through `/flight_stream/set_telemetry`; its receipt window and processing acknowledgement do not establish durable historical storage.
+Digital Airspace Connector and DJI Android GCS use one vendor-neutral Flight Blender archive API. Its payload version is `session.schemaVersion: 2`. This is an OpenUTM application contract, not a new ASTM standard. Live traffic continues through `/flight_stream/set_telemetry`; its receipt window and processing acknowledgement do not establish durable historical storage.
 
 ## Deploy and use
 

@@ -64,7 +64,7 @@ Item {
             fetching = false;
             try {
                 if (request.status !== 200)
-                    throw new Error("Adapter unavailable");
+                    throw new Error("Digital Airspace Connector unavailable");
                 showMap(JSON.parse(request.responseText));
             } catch (e) {
                 stale = true;

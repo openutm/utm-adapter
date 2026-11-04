@@ -174,5 +174,5 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           cd release
-          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "UTM Adapter $RELEASE_TAG" --notes-file release-notes.md ./*.zip ./*.tar.gz ./*.exe ./*.AppImage ./*.dmg ./*.build.json ./*.sha256
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "Digital Airspace Connector $RELEASE_TAG" --notes-file release-notes.md ./*.zip ./*.tar.gz ./*.exe ./*.AppImage ./*.dmg ./*.build.json ./*.sha256
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false

@@ -62,10 +62,10 @@
   });
 </script>
 
-<svelte:head><title>UTM Adapter</title></svelte:head>
+<svelte:head><title>Digital Airspace Connector</title></svelte:head>
 <div class="shell">
   <header>
-    <div class="brand"><span class="logo">⊕</span><div><strong>UTM Adapter</strong><span>OPENUTM</span></div></div>
+    <div class="brand"><span class="logo">⊕</span><div><strong>Digital Airspace Connector</strong><span>OPENUTM</span></div></div>
     <span class="version">VERSION <b>{snapshot?.version || '0.2.0'}</b></span>
   </header>
   <nav aria-label="Main navigation">
@@ -76,7 +76,7 @@
   <main>
     {#if error}<div class="alert error" role="alert">{error}<button aria-label="Dismiss error" onclick={() => error = ''}>×</button></div>{/if}
     {#if notice}<div class="alert success" role="status">{notice}<button aria-label="Dismiss notification" onclick={() => notice = ''}>×</button></div>{/if}
-    {#if !snapshot}<div class="intro"><h1>Starting UTM Adapter…</h1><p>Loading your connections.</p></div>
+    {#if !snapshot}<div class="intro"><h1>Starting Digital Airspace Connector…</h1><p>Loading your connections.</p></div>
     {:else if page === 'status'}
       <section class="intro"><div><div class="eyebrow">CONNECTION OVERVIEW</div><h1>{title}</h1><p>A quiet link between your ground station and Flight Blender.</p></div><button class="secondary" disabled={busy} onclick={() => action(() => snapshot?.running ? Service.Stop() : Service.Start())}>{snapshot.running ? 'Pause connections' : 'Resume connections'}</button></section>
       <section class="cards" aria-label="Connection status">
@@ -89,7 +89,7 @@
         <section class="setup"><span class="setup-icon">↗</span><div><h3>{snapshot.config.source === 'direct' ? 'Connect your MAVLink source' : 'Your ground station connects automatically'}</h3>
           {#if snapshot.config.source === 'direct'}<p>Send vehicle telemetry to <code>{snapshot.config.address}</code>, or select a TCP or serial connection in settings.</p>
           {:else if detected.length}{#each detected as g}<p><b>{g.name}:</b> {g.setupDetail || 'Checking forwarding settings…'}</p>{/each}
-          {:else}<p>Open QGroundControl or Mission Planner once, then close it. The adapter will find it and set up local telemetry forwarding.</p>{/if}
+          {:else}<p>Open QGroundControl or Mission Planner once, then close it. The connector will find it and set up local telemetry forwarding.</p>{/if}
           {#if snapshot.config.source !== 'direct'}<p class="muted">Settings are updated while the GCS is closed. Open it afterward and connect your vehicle normally. Existing forwarding destinations are preserved.</p>{/if}
           <button class="text-button" onclick={() => page = snapshot?.config.source === 'direct' ? 'settings' : 'gcs'}>{snapshot.config.source === 'direct' ? 'Connection settings' : 'Ground station options'} <span>→</span></button></div></section>
       {/if}
@@ -129,7 +129,7 @@
         <p class="help">Turning automatic configuration off keeps existing forwarding and installed plugins in place. Direct MAVLink mode skips GCS configuration.</p>
       </section>
       <section class="panel settings"><div class="panel-heading"><div><h2>OpenUTM for Mission Planner</h2><p>Telemetry forwarding and airspace map overlays · version 0.2.0</p></div><span class="badge" class:good={planner?.enhancementState === 'installed'}>{planner?.enhancementState === 'installed' ? 'File installed' : snapshot.config.missionPlannerPlugin ? 'Selected' : 'Optional'}</span></div>
-        <p>Forward telemetry from connected aircraft and show Flight Blender restrictions on the Flight Data map. Flight Blender credentials stay in the adapter.</p>
+        <p>Forward telemetry from connected aircraft and show Flight Blender restrictions on the Flight Data map. Flight Blender credentials stay in the connector.</p>
         <p class="help">Installs one plugin file into your existing Mission Planner. Close Mission Planner to install, update or remove it, then reopen it. Changed files are backed up. Windows runtime validation is still pending.</p>
         {#if planner?.installed}<p class="help">{planner.setupDetail}</p>{:else}<p class="help">Mission Planner has not been found on this computer. This option becomes available when its installation is detected.</p>{/if}
         {#if planner?.enhancementState === 'installed'}
@@ -146,13 +146,13 @@
         {#if planner?.settingsPath}<details class="activity"><summary>Installation details</summary><p class="help config-path">Plugin: {planner.settingsPath}</p>{#if planner.backupPath}<p class="help config-path">Backup: {planner.backupPath}</p>{/if}<p class="help">“File installed” confirms the plugin is on disk. Incoming telemetry confirms that forwarding is working.</p></details>{/if}
       </section>
       <section class="panel settings"><div class="panel-heading"><div><h2>OpenUTM QGroundControl</h2><p>Optional custom application</p></div><span class="badge">Source integration</span></div>
-        <p>The OpenUTM QGC build draws restriction boundaries from the local adapter feed. Download it from the release's GCS packages, or build it using DEVELOPING.md.</p>
+        <p>The OpenUTM QGC build draws restriction boundaries from the local connector feed. Download it from the release's GCS packages, or build it using DEVELOPING.md.</p>
         <p class="help">Existing QGroundControl supports telemetry through automatic forwarding. Install the OpenUTM build to add native map overlays.</p>
       </section>
     {:else}
-      <section class="intro"><div><div class="eyebrow">CONNECTION SETTINGS</div><h1>Set up once. Stay connected.</h1><p>Your adapter keeps working when you close this window.</p></div></section>
+      <section class="intro"><div><div class="eyebrow">CONNECTION SETTINGS</div><h1>Set up once. Stay connected.</h1><p>Your connector keeps working when you close this window.</p></div></section>
       <form onsubmit={(e) => {e.preventDefault(); save();}}>
-        <section class="panel settings"><div class="section-title"><span>01</span><div><h2>Flight Blender</h2><p>Connect to your UTM service</p></div></div>
+        <section class="panel settings"><div class="section-title"><span>01</span><div><h2>Flight Blender</h2><p>Connect to your digital airspace service</p></div></div>
           <label>Server URL<input bind:value={form.baseURL} placeholder="http://127.0.0.1:8000" required /></label>
           <label>Authentication<select bind:value={form.authMode}><option value="bearer">Bearer token</option><option value="oauth">OAuth · client credentials</option><option value="none">None · local development server</option></select></label>
           {#if form.authMode === 'bearer'}<label>Bearer token<input type="password" autocomplete="off" bind:value={form.token} placeholder={snapshot.config.hasToken ? 'Saved securely · leave blank to keep' : 'Paste access token'} /></label>{/if}
@@ -187,5 +187,5 @@
       </form>
     {/if}
   </main>
-  <footer><span><i class="running"></i>Close this window to keep the adapter in your tray.</span><span>OpenUTM · 0.2.0</span></footer>
+  <footer><span><i class="running"></i>Close this window to keep the connector in your tray.</span><span>OpenUTM · 0.2.0</span></footer>
 </div>
