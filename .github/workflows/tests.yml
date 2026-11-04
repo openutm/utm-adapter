@@ -64,6 +64,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install locked frontend dependencies
         run: npm --prefix frontend ci
+      - name: Test dashboard and session workflows
+        run: npm --prefix frontend test
       - name: Check Svelte and TypeScript
         run: npm --prefix frontend run check
 

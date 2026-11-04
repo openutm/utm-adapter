@@ -65,7 +65,7 @@ func (c Config) Validate() error {
 	if c.AuthMode == "oauth" && (!validURL(c.TokenURL) || c.ClientID == "") {
 		return fmt.Errorf("OAuth requires a token URL and client ID")
 	}
-	if c.Source != "auto" && c.Source != "qgroundcontrol" && c.Source != "mission-planner" && c.Source != "direct" {
+	if c.Source != "auto" && !knownGCS(c.Source) && c.Source != "direct" {
 		return fmt.Errorf("unknown telemetry source")
 	}
 	if c.Transport != "udp" && c.Transport != "tcp" && c.Transport != "serial" {

@@ -40,7 +40,7 @@ The map listener runs only while connections run. Release GCS integrations use t
 
 | UI option | JSON key | Default | Meaning |
 | --- | --- | --- | --- |
-| Telemetry source | `source` | `auto` | `auto`, `qgroundcontrol`, `mission-planner`, or `direct`. Controls discovery/setup policy; the transport below determines reception. |
+| Telemetry source | `source` | `auto` | `auto`, `direct`, or a registered GCS ID (built-ins: `qgroundcontrol`, `mission-planner`). Controls discovery/setup policy; the transport below determines reception. |
 | Set up ground station forwarding automatically | `autoConfigureGCS` | `true` | Allows managed local UDP setup while the GCS is closed. Direct mode skips setup. Does not install the Mission Planner plugin without opt-in. |
 | Install/remove OpenUTM plugin in Ground stations | `missionPlannerPlugin` | `false` | Persists explicit opt-in to the managed Mission Planner source plugin. |
 | Connection type | `transport` | `udp` | `udp` listener, `tcp` client, or `serial` connection. |

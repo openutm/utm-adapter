@@ -35,7 +35,7 @@ func forwardingTarget(c Config) (string, error) {
 	return net.JoinHostPort(host, port), nil
 }
 
-func configureGCS(c Config, found []GCS) []GCS {
+func configureBuiltinGCS(c Config, found []GCS) []GCS {
 	for i := range found {
 		g := &found[i]
 		if g.ID == "mission-planner" && g.SettingsPath != "" {
