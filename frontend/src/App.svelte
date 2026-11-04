@@ -65,7 +65,7 @@
 <svelte:head><title>Digital Airspace Connector</title></svelte:head>
 <div class="shell">
   <header>
-    <div class="brand"><span class="logo">⊕</span><div><strong>Digital Airspace Connector</strong><span>OPENUTM</span></div></div>
+    <div class="brand"><img class="logo" src="/branding/openutm-logo.svg" alt="OpenUTM" width="145" height="36"/><strong>Digital Airspace Connector</strong></div>
     <span class="version">VERSION <b>{snapshot?.version || '0.2.0'}</b></span>
   </header>
   <nav aria-label="Main navigation">
