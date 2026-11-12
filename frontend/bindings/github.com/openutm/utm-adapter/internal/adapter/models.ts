@@ -82,6 +82,15 @@ export interface Link {
     "checkedAt": string;
 }
 
+export interface PassportConfig {
+    "url": string;
+    "domain": string;
+    "token_url": string;
+    "audience": string;
+    "client_id": string;
+    "client_secret": string;
+}
+
 export interface Pilot {
     "id": string;
     "name": string;
@@ -135,7 +144,49 @@ export interface Snapshot {
     "now": string;
 }
 
+/**
+ * TrustedConfig is deliberately separate from the passive adapter configuration.
+ */
+export interface TrustedConfig {
+    "enabled": boolean;
+    "server_url": string;
+    "timeout_seconds": number;
+    "auto_connect_drone": boolean;
+    "auto_connect_server": boolean;
+    "watch_directory": string;
+    "flight_passport": PassportConfig;
+    "credentials": TrustedCredentials;
+}
+
+export interface TrustedCredentials {
+    "organization_id": string;
+    "operator_id": string;
+    "default_pilot_id": string;
+}
+
+export interface TrustedJob {
+    "planID": string;
+    "operationID": string;
+    "logID": string;
+    "stage": string;
+    "marker": string;
+}
+
+export interface TrustedStatus {
+    "enabled": boolean;
+    "ready": boolean;
+    "drone": Link;
+    "server": Link;
+    "systemID": number;
+    "controllerID": string;
+    "aircraftID": string;
+    "pilotID": string;
+    "pilots": RegistryEntity[] | null;
+    "detail": string;
+}
+
 export interface Vehicle {
+    "controllerID": string;
     "systemID": number;
     "lastSeen": string;
     "heartbeatAt": string;

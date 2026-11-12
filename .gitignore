@@ -8,3 +8,7 @@
 *.log
 /product.json
 *.syso
+
+/aerobridge_config.json
+/aerobridge_jobs.json
+/aerobridge_logs/

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 )
 
 type apiPage struct {
@@ -71,7 +72,7 @@ func (a *Aerobridge) list(ctx context.Context, path string) ([]RegistryEntity, e
 		if len(path) > 0 && containsQuery(path) {
 			sep = "&"
 		}
-		raw, err := a.client.request(ctx, "GET", fmt.Sprintf("%s%spage=%d", path, sep, page), nil, true)
+		raw, err := a.request(ctx, "GET", fmt.Sprintf("%s%spage=%d", path, sep, page), nil, true)
 		if err != nil {
 			return nil, fmt.Errorf("Aerobridge: %w", err)
 		}
@@ -160,4 +161,17 @@ func (s *Service) GetFleet() (Fleet, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestBudget)
 	defer cancel()
 	return NewAerobridge(c).Fleet(ctx)
+}
+
+// aerobridgeError identifies remote failures without exposing response bodies or tokens.
+type aerobridgeError struct{ err error }
+
+func (e *aerobridgeError) Error() string { return e.err.Error() }
+func (e *aerobridgeError) Unwrap() error { return e.err }
+func (a *Aerobridge) request(ctx context.Context, method, path string, payload any, auth bool) ([]byte, error) {
+	raw, err := a.client.request(ctx, method, path, payload, auth)
+	if err != nil {
+		return nil, &aerobridgeError{fmt.Errorf("%s", strings.ReplaceAll(strings.ReplaceAll(err.Error(), "Flight Blender", "Aerobridge"), "flightblender.", "aerobridge."))}
+	}
+	return raw, nil
 }

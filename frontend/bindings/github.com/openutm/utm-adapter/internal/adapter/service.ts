@@ -13,6 +13,10 @@ export function ApplyConfig(c: $models.Config): $CancellablePromise<void> {
     return $Call.ByID(2974556148, c);
 }
 
+export function ApplyTrustedConfig(c: $models.TrustedConfig): $CancellablePromise<void> {
+    return $Call.ByID(711708715, c);
+}
+
 export function BeginSession(a: $models.Assignment): $CancellablePromise<$models.Session> {
     return $Call.ByID(3265027169, a);
 }
@@ -26,6 +30,26 @@ export function ClearCredentials(): $CancellablePromise<void> {
  */
 export function Close(): $CancellablePromise<void> {
     return $Call.ByID(682221518);
+}
+
+/**
+ * CollectTrustedLog reads the firmware-produced JSON file through MAVFTP. It
+ * reconciles stable UUIDs before POST and signing, including lost responses.
+ */
+export function CollectTrustedLog(operationID: string, remotePath: string): $CancellablePromise<$models.TrustedJob> {
+    return $Call.ByID(2721188175, operationID, remotePath);
+}
+
+/**
+ * ConnectTrusted authenticates before querying the vehicle registry. Pilot selection
+ * is a separate step so no fleet command can run with an implicit assignment.
+ */
+export function ConnectTrusted(systemID: number): $CancellablePromise<$models.TrustedStatus> {
+    return $Call.ByID(902839211, systemID);
+}
+
+export function CreateTrustedOperation(planID: string, name: string, start: string, end: string): $CancellablePromise<$models.TrustedJob> {
+    return $Call.ByID(270370870, planID, name, start, end);
 }
 
 export function EndSession(id: string): $CancellablePromise<void> {
@@ -51,11 +75,69 @@ export function GetSnapshot(): $CancellablePromise<$models.Snapshot> {
     return $Call.ByID(3543970594);
 }
 
+export function GetTrustedCertificates(): $CancellablePromise<$models.RegistryEntity[] | null> {
+    return $Call.ByID(621519345);
+}
+
+export function GetTrustedConfig(): $CancellablePromise<$models.TrustedConfig> {
+    return $Call.ByID(444958159);
+}
+
+/**
+ * GetTrustedJobs exposes durable log receipts for retry after server signing fails.
+ */
+export function GetTrustedJobs(): $CancellablePromise<$models.TrustedJob[] | null> {
+    return $Call.ByID(214652437);
+}
+
+export function GetTrustedOperations(): $CancellablePromise<$models.RegistryEntity[] | null> {
+    return $Call.ByID(1231470855);
+}
+
+export function GetTrustedPlans(): $CancellablePromise<$models.RegistryEntity[] | null> {
+    return $Call.ByID(638165339);
+}
+
+export function GetTrustedStatus(): $CancellablePromise<$models.TrustedStatus> {
+    return $Call.ByID(139454823);
+}
+
+export function ImportTrustedPlan(path: string, start: string, end: string): $CancellablePromise<$models.TrustedJob> {
+    return $Call.ByID(2027489641, path, start, end);
+}
+
+/**
+ * LoadTrustedOperation transfers the exact server plan and granted artifacts.
+ * It never arms the aircraft. Completion is reported only after read-back checks.
+ */
+export function LoadTrustedOperation(id: string): $CancellablePromise<void> {
+    return $Call.ByID(2164211962, id);
+}
+
+/**
+ * RegisterTrustedPublicKey never handles a private key. Generation must happen
+ * on the aircraft using its firmware-specific command, outside standard MAVFTP.
+ */
+export function RegisterTrustedPublicKey(remotePath: string): $CancellablePromise<void> {
+    return $Call.ByID(4190701870, remotePath);
+}
+
 /**
  * Removal is explicit; clearing the opt-in alone never removes installed files.
  */
 export function RemoveMissionPlannerPlugin(): $CancellablePromise<void> {
     return $Call.ByID(4123139495);
+}
+
+/**
+ * RetryTrustedLog signs an already uploaded log without fetching it from the vehicle again.
+ */
+export function RetryTrustedLog(id: string): $CancellablePromise<$models.TrustedJob> {
+    return $Call.ByID(3296905067, id);
+}
+
+export function SelectTrustedPilot(id: string): $CancellablePromise<void> {
+    return $Call.ByID(2406328165, id);
 }
 
 export function Start(): $CancellablePromise<void> {
@@ -71,4 +153,8 @@ export function Stop(): $CancellablePromise<void> {
  */
 export function Synchronize(): $CancellablePromise<void> {
     return $Call.ByID(3073840824);
+}
+
+export function VerifyTrustedComponent(id: string): $CancellablePromise<void> {
+    return $Call.ByID(1157811837, id);
 }
